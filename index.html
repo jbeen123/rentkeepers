@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RentKeepers - Simple Rent Tracking</title>
+    <!-- Bootstrap 5 CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --success-color: #27ae60;
+            --danger-color: #e74c3c;
+            --warning-color: #f39c12;
+        }
+        
+        body {
+            background-color: #f8f9fa;
+        }
+        
+        .navbar {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+        
+        .card {
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 8px;
+        }
+        
+        .card-header {
+            background-color: #fff;
+            border-bottom: 2px solid #e9ecef;
+            font-weight: 600;
+        }
+        
+        .status-paid { color: var(--success-color); }
+        .status-late { color: var(--danger-color); }
+        .status-pending { color: var(--warning-color); }
+        
+        .badge-paid { background-color: var(--success-color); }
+        .badge-late { background-color: var(--danger-color); }
+        .badge-pending { background-color: var(--warning-color); }
+        
+        .dashboard-stat {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .dashboard-stat .number {
+            font-size: 2.5rem;
+            font-weight: bold;
+        }
+        
+        .dashboard-stat .label {
+            color: #6c757d;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+        }
+        
+        .table th {
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.5px;
+        }
+        
+        .btn-action {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .page-section {
+            display: none;
+        }
+        
+        .page-section.active {
+            display: block;
+        }
+
+        .auth-only { display: none; }
+        .guest-only { display: block; }
+        
+        body.logged-in .auth-only { display: block; }
+        body.logged-in .guest-only { display: none; }
+        body.logged-in .nav-guest { display: none !important; }
+        body:not(.logged-in) .nav-auth { display: none !important; }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-dark navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="#" onclick="showPage('dashboard')">
+                <i class="bi bi-house-check-fill me-2"></i>RentKeepers
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto nav-auth">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="showPage('dashboard')">
+                            <i class="bi bi-speedometer2 me-1"></i>Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="showPage('tenants')">
+                            <i class="bi bi-people me-1"></i>Tenants
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="showPage('payments')">
+                            <i class="bi bi-cash-coin me-1"></i>Payments
+                        </a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle me-1"></i><span id="nav-user-name">Account</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#" onclick="showPage('settings')">
+                                <i class="bi bi-gear me-2"></i>Settings
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" onclick="logout()">
+                                <i class="bi bi-box-arrow-right me-2"></i>Logout
+                            </a></li>
+                        </ul>
+                    </li>
+                </ul>
+                <ul class="navbar-nav ms-auto nav-guest">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="showPage('login')">Login</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="showPage('register')">Register</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Flash Messages -->
+    <div class="container mt-3" id="flash-container"></div>
+
+    <!-- LOGIN PAGE -->
+    <main class="container py-4 page-section" id="page-login">
+        <div class="row justify-content-center">
+            <div class="col-md-5">
+                <div class="card shadow">
+                    <div class="card-header text-center">
+                        <h4 class="mb-0"><i class="bi bi-house-check-fill me-2"></i>RentKeepers</h4>
+                        <p class="text-muted mb-0">Simple Rent Tracking</p>
+                    </div>
+                    <div class="card-body p-4">
+                        <h5 class="mb-3">Login</h5>
+                        <form id="login-form">
+                            <div class="mb-3">
+                                <label for="login-email" class="form-label">Email</label>
+                                <input type="email" class="form-control" id="login-email" placeholder="you@example.com" required autofocus>
+                            </div>
+                            <div class="mb-3">
+                                <label for="login-password" class="form-label">Password</label>
+                                <input type="password" class="form-control" id="login-password" required>
+                            </div>
+                            <div class="mb-3 form-check">
+                                <input type="checkbox" class="form-check-input" id="login-remember">
+                                <label class="form-check-label" for="login-remember">Remember me</label>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-box-arrow-in-right me-2"></i>Login
+                            </button>
+                        </form>
+                        <hr class="my-4">
+                        <div class="text-center">
+                            <p class="mb-0">Don't have an account? <a href="#" onclick="showPage('register')">Register</a></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- REGISTER PAGE -->
+    <main class="container py-4 page-section" id="page-register">
+        <div class="row justify-content-center">
+            <div class="col-md-5">
+                <div class="card shadow">
+                    <div class="card-header text-center">
+                        <h4 class="mb-0"><i class="bi bi-house-check-fill me-2"></i>RentKeepers</h4>
+                        <p class="text-muted mb-0">Simple Rent Tracking</p>
+                    </div>
+                    <div class="card-body p-4">
+                        <h5 class="mb-3">Create Account</h5>
+                        <form id="register-form">
+                            <div class="mb-3">
+                                <label for="register-firstname" class="form-label">First Name</label>
+                                <input type="text" class="form-control" id="register-firstname" placeholder="John">
+                            </div>
+                            <div class="mb-3">
+                                <label for="register-email" class="form-label">Email *</label>
+                                <input type="email" class="form-control" id="register-email" placeholder="you@example.com" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="register-password" class="form-label">Password *</label>
+                                <input type="password" class="form-control" id="register-password" minlength="6" required>
+                                <div class="form-text">Must be at least 6 characters</div>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-person-plus me-2"></i>Create Account
+                            </button>
+                        </form>
+                        <hr class="my-4">
+                        <div class="text-center">
+                            <p class="mb-0">Already have an account? <a href="#" onclick="showPage('login')">Login</a></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- DASHBOARD PAGE -->
+    <main class="container py-4 page-section" id="page-dashboard">
+        <div class="row mb-4">
+            <div class="col-12">
+                <h2 class="mb-4">
+                    <i class="bi bi-speedometer2 me-2"></i>Dashboard
+                    <span class="text-muted fs-5" id="current-month-display"></span>
+                </h2>
+            </div>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body dashboard-stat">
+                        <div class="number text-success" id="dash-collected">$0.00</div>
+                        <div class="label">Collected This Month</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body dashboard-stat">
+                        <div class="number text-primary" id="dash-expected">$0.00</div>
+                        <div class="label">Expected This Month</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body dashboard-stat">
+                        <div class="number text-danger" id="dash-outstanding">$0.00</div>
+                        <div class="label">Outstanding</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rent Status Table -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-list-check me-2"></i>Rent Status</span>
+                <button class="btn btn-primary btn-sm" onclick="showPage('payments')">
+                    <i class="bi bi-plus-circle me-1"></i>Log Payment
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" id="dashboard-table-container">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Tenant</th>
+                                <th>Property</th>
+                                <th>Rent Amount</th>
+                                <th>Due Date</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dashboard-tenant-list"></tbody>
+                    </table>
+                </div>
+                <div class="text-center py-5" id="dashboard-empty" style="display:none;">
+                    <i class="bi bi-house text-muted" style="font-size: 3rem;"></i>
+                    <p class="mt-3 text-muted">No tenants yet. <a href="#" onclick="showPage('tenants')">Add your first tenant</a>.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary Row -->
+        <div class="row mt-4" id="dashboard-summary">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-md-4">
+                                <h5 class="text-success">
+                                    <i class="bi bi-check-circle me-2"></i><span id="count-paid">0</span> Paid
+                                </h5>
+                            </div>
+                            <div class="col-md-4">
+                                <h5 class="text-warning">
+                                    <i class="bi bi-clock me-2"></i><span id="count-pending">0</span> Pending
+                                </h5>
+                            </div>
+                            <div class="col-md-4">
+                                <h5 class="text-danger">
+                                    <i class="bi bi-exclamation-circle me-2"></i><span id="count-late">0</span> Late
+                                </h5>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- TENANTS PAGE -->
+    <main class="container py-4 page-section" id="page-tenants">
+        <div class="row">
+            <!-- Add Tenant Form -->
+            <div class="col-lg-4 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-person-plus me-2"></i>Add New Tenant
+                    </div>
+                    <div class="card-body">
+                        <form id="add-tenant-form">
+                            <div class="mb-3">
+                                <label for="tenant-name" class="form-label">Tenant Name *</label>
+                                <input type="text" class="form-control" id="tenant-name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="tenant-address" class="form-label">Property Address *</label>
+                                <input type="text" class="form-control" id="tenant-address" placeholder="123 Main St, Apt 4B" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="tenant-rent" class="form-label">Monthly Rent ($) *</label>
+                                <input type="number" class="form-control" id="tenant-rent" step="0.01" min="0" placeholder="1200.00" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="tenant-dueday" class="form-label">Rent Due Day (1-31) *</label>
+                                <input type="number" class="form-control" id="tenant-dueday" min="1" max="31" value="1" required>
+                                <div class="form-text">Day of month rent is due</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="tenant-phone" class="form-label">Phone Number</label>
+                                <input type="tel" class="form-control" id="tenant-phone" placeholder="(555) 123-4567">
+                            </div>
+                            <div class="mb-3">
+                                <label for="tenant-email" class="form-label">Tenant Email</label>
+                                <input type="email" class="form-control" id="tenant-email" placeholder="tenant@example.com">
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-plus-circle me-2"></i>Add Tenant
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tenant List -->
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-people me-2"></i>All Tenants
+                        <span class="badge bg-secondary ms-2" id="tenant-count">0</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive" id="tenants-table-container">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Property</th>
+                                        <th>Monthly Rent</th>
+                                        <th>Due Day</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tenants-list"></tbody>
+                            </table>
+                        </div>
+                        <div class="text-center py-5" id="tenants-empty">
+                            <i class="bi bi-person text-muted" style="font-size: 3rem;"></i>
+                            <p class="mt-3 text-muted">No tenants yet. Add one on the left!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Stats -->
+                <div class="card mt-3" id="tenants-stats" style="display:none;">
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col">
+                                <h5 class="text-primary" id="stats-total-tenants">0</h5>
+                                <small class="text-muted">Total Tenants</small>
+                            </div>
+                            <div class="col">
+                                <h5 class="text-success" id="stats-monthly-income">$0.00</h5>
+                                <small class="text-muted">Total Monthly Income</small>
+                            </div>
+                            <div class="col">
+                                <h5 class="text-info" id="stats-annual-income">$0.00</h5>
+                                <small class="text-muted">Annual Income</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- EDIT TENANT PAGE -->
+    <main class="container py-4 page-section" id="page-edit-tenant">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-pencil-square me-2"></i>Edit Tenant: <span id="edit-tenant-name-display"></span>
+                    </div>
+                    <div class="card-body">
+                        <form id="edit-tenant-form">
+                            <input type="hidden" id="edit-tenant-id">
+                            <div class="mb-3">
+                                <label for="edit-tenant-name" class="form-label">Tenant Name *</label>
+                                <input type="text" class="form-control" id="edit-tenant-name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit-tenant-address" class="form-label">Property Address *</label>
+                                <input type="text" class="form-control" id="edit-tenant-address" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit-tenant-rent" class="form-label">Monthly Rent ($) *</label>
+                                <input type="number" class="form-control" id="edit-tenant-rent" step="0.01" min="0" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit-tenant-dueday" class="form-label">Rent Due Day (1-31) *</label>
+                                <input type="number" class="form-control" id="edit-tenant-dueday" min="1" max="31" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit-tenant-phone" class="form-label">Phone Number</label>
+                                <input type="tel" class="form-control" id="edit-tenant-phone">
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit-tenant-email" class="form-label">Tenant Email</label>
+                                <input type="email" class="form-control" id="edit-tenant-email">
+                            </div>
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-circle me-2"></i>Update Tenant
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="showPage('tenants')">
+                                    <i class="bi bi-x-circle me-2"></i>Cancel
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- PAYMENTS PAGE -->
+    <main class="container py-4 page-section" id="page-payments">
+        <div class="row">
+            <!-- Log Payment Form -->
+            <div class="col-lg-4 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-cash-coin me-2"></i>Log Payment
+                    </div>
+                    <div class="card-body" id="payment-form-container">
+                        <form id="add-payment-form">
+                            <div class="mb-3">
+                                <label for="payment-tenant" class="form-label">Tenant *</label>
+                                <select class="form-select" id="payment-tenant" required>
+                                    <option value="">Select tenant...</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="payment-amount" class="form-label">Amount Paid ($) *</label>
+                                <input type="number" class="form-control" id="payment-amount" step="0.01" min="0" required>
+                                <div class="form-text" id="payment-rent-hint"></div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="payment-month" class="form-label">For Month *</label>
+                                <input type="month" class="form-control" id="payment-month" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="payment-method" class="form-label">Payment Method</label>
+                                <select class="form-select" id="payment-method">
+                                    <option value="Cash">Cash</option>
+                                    <option value="Check">Check</option>
+                                    <option value="Venmo">Venmo</option>
+                                    <option value="Zelle">Zelle</option>
+                                    <option value="Bank Transfer">Bank Transfer</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="payment-notes" class="form-label">Notes</label>
+                                <textarea class="form-control" id="payment-notes" rows="2" placeholder="Late fee waived, partial payment, etc."></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-success w-100">
+                                <i class="bi bi-check-circle me-2"></i>Log Payment
+                            </button>
+                        </form>
+                    </div>
+                    <div class="card-body text-center py-4" id="payment-no-tenants" style="display:none;">
+                        <i class="bi bi-exclamation-circle text-muted" style="font-size: 2rem;"></i>
+                        <p class="mt-2 text-muted">Add tenants first before logging payments.</p>
+                        <button class="btn btn-primary btn-sm" onclick="showPage('tenants')">
+                            <i class="bi bi-person-plus me-1"></i>Add Tenant
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment History -->
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-clock-history me-2"></i>Recent Payments</span>
+                        <span class="badge bg-secondary" id="payment-count">0</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive" id="payments-table-container">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Tenant</th>
+                                        <th>For Month</th>
+                                        <th>Amount</th>
+                                        <th>Method</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="payments-list"></tbody>
+                            </table>
+                        </div>
+                        <div class="text-center py-5" id="payments-empty">
+                            <i class="bi bi-receipt text-muted" style="font-size: 3rem;"></i>
+                            <p class="mt-3 text-muted">No payments logged yet.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- SETTINGS PAGE -->
+    <main class="container py-4 page-section" id="page-settings">
+        <div class="row">
+            <!-- Profile Settings -->
+            <div class="col-lg-6 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-person me-2"></i>Profile Settings
+                    </div>
+                    <div class="card-body">
+                        <form id="profile-form">
+                            <div class="mb-3">
+                                <label for="settings-email" class="form-label">Email Address</label>
+                                <input type="email" class="form-control" id="settings-email" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="settings-firstname" class="form-label">First Name</label>
+                                <input type="text" class="form-control" id="settings-firstname">
+                            </div>
+                            <div class="mb-3">
+                                <label for="settings-password" class="form-label">New Password (leave blank to keep current)</label>
+                                <input type="password" class="form-control" id="settings-password">
+                                <div class="form-text">Minimum 6 characters</div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save me-2"></i>Save Profile
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Email Reminder Settings -->
+            <div class="col-lg-6 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-envelope me-2"></i>Email Reminders
+                    </div>
+                    <div class="card-body">
+                        <form id="reminders-form">
+                            <div class="mb-3 form-check">
+                                <input type="checkbox" class="form-check-input" id="reminder-enabled">
+                                <label class="form-check-label" for="reminder-enabled">
+                                    <strong>Enable email reminders</strong>
+                                </label>
+                            </div>
+                            <div class="mb-3">
+                                <label for="reminder-days" class="form-label">Send reminder how many days before rent is due?</label>
+                                <select class="form-select" id="reminder-days">
+                                    <option value="1">1 day before</option>
+                                    <option value="2">2 days before</option>
+                                    <option value="3" selected>3 days before</option>
+                                    <option value="5">5 days before</option>
+                                    <option value="7">1 week before</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="reminder-time" class="form-label">What time to send reminders?</label>
+                                <input type="time" class="form-control" id="reminder-time" value="09:00">
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-save me-2"></i>Save Reminder Settings
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="testEmail()">
+                                    <i class="bi bi-send me-2"></i>Send Test Email
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Export Data -->
+                <div class="card mt-3">
+                    <div class="card-header bg-light">
+                        <i class="bi bi-download me-2"></i>Export Data
+                    </div>
+                    <div class="card-body">
+                        <p>Download your data as a CSV file for backup or tax purposes.</p>
+                        <button class="btn btn-outline-primary" onclick="exportCSV()">
+                            <i class="bi bi-file-earmark-spreadsheet me-2"></i>Export to CSV
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center py-4 text-muted">
+        <small>RentKeepers &copy; 2026 - Simple Rent Tracking</small>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Application Logic -->
+    <script>
+        // Data Storage (localStorage)
+        const Storage = {
+            getUsers() {
+                return JSON.parse(localStorage.getItem('rk_users') || '[]');
+            },
+            saveUsers(users) {
+                localStorage.setItem('rk_users', JSON.stringify(users));
+            },
+            getTenants() {
+                return JSON.parse(localStorage.getItem('rk_tenants') || '[]');
+            },
+            saveTenants(tenants) {
+                localStorage.setItem('rk_tenants', JSON.stringify(tenants));
+            },
+            getPayments() {
+                return JSON.parse(localStorage.getItem('rk_payments') || '[]');
+            },
+            savePayments(payments) {
+                localStorage.setItem('rk_payments', JSON.stringify(payments));
+            },
+            getCurrentUser() {
+                return JSON.parse(localStorage.getItem('rk_current_user') || 'null');
+            },
+            saveCurrentUser(user) {
+                localStorage.setItem('rk_current_user', JSON.stringify(user));
+            }
+        };
+
+        // Initialize demo data if empty
+        function initDemoData() {
+            if (Storage.getUsers().length === 0) {
+                // Create demo user
+                const demoUser = {
+                    id: 1,
+                    email: 'demo@rentkeepers.com',
+                    password: 'demo123',
+                    first_name: 'Demo',
+                    reminder_enabled: true,
+                    reminder_days_before: 3,
+                    reminder_time: '09:00'
+                };
+                Storage.saveUsers([demoUser]);
+            }
+        }
+
+        // Flash Messages
+        function flash(message, type = 'info') {
+            const container = document.getElementById('flash-container');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type} alert-dismissible fade show`;
+            alert.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            container.appendChild(alert);
+            setTimeout(() => alert.remove(), 5000);
+        }
+
+        // Page Navigation
+        function showPage(pageName) {
+            // Hide all pages
+            document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
+            
+            // Show requested page
+            const page = document.getElementById(`page-${pageName}`);
+            if (page) page.classList.add('active');
+            
+            // Update URL hash
+            window.location.hash = pageName;
+            
+            // Refresh data
+            if (pageName === 'dashboard') renderDashboard();
+            if (pageName === 'tenants') renderTenants();
+            if (pageName === 'payments') renderPayments();
+            if (pageName === 'settings') renderSettings();
+            
+            // Scroll to top
+            window.scrollTo(0, 0);
+        }
+
+        // Auth Functions
+        function login(email, password) {
+            const users = Storage.getUsers();
+            const user = users.find(u => u.email === email && u.password === password);
+            if (user) {
+                Storage.saveCurrentUser(user);
+                document.body.classList.add('logged-in');
+                document.getElementById('nav-user-name').textContent = user.first_name || 'Account';
+                showPage('dashboard');
+                flash(`Welcome back${user.first_name ? ', ' + user.first_name : ''}!`, 'success');
+                return true;
+            }
+            return false;
+        }
+
+        function logout() {
+            Storage.saveCurrentUser(null);
+            document.body.classList.remove('logged-in');
+            showPage('login');
+            flash('You have been logged out.', 'info');
+        }
+
+        function register(firstName, email, password) {
+            const users = Storage.getUsers();
+            if (users.find(u => u.email === email)) {
+                flash('Email already registered. Please log in.', 'danger');
+                return false;
+            }
+            
+            const newUser = {
+                id: Date.now(),
+                email: email,
+                password: password,
+                first_name: firstName,
+                reminder_enabled: false,
+                reminder_days_before: 3,
+                reminder_time: '09:00'
+            };
+            
+            users.push(newUser);
+            Storage.saveUsers(users);
+            Storage.saveCurrentUser(newUser);
+            document.body.classList.add('logged-in');
+            document.getElementById('nav-user-name').textContent = newUser.first_name || 'Account';
+            showPage('dashboard');
+            flash('Account created! Welcome to RentKeepers.', 'success');
+            return true;
+        }
+
+        // Dashboard Rendering
+        function renderDashboard() {
+            const today = new Date();
+            const currentMonth = today.toISOString().slice(0, 7);
+            document.getElementById('current-month-display').textContent = `- ${formatMonth(currentMonth)}`;
+            
+            const tenants = Storage.getTenants();
+            const payments = Storage.getPayments().filter(p => p.for_month === currentMonth);
+            
+            let totalExpected = tenants.reduce((sum, t) => sum + t.monthly_rent, 0);
+            let totalCollected = payments.reduce((sum, p) => sum + p.amount_paid, 0);
+            
+            document.getElementById('dash-collected').textContent = `$${totalCollected.toFixed(2)}`;
+            document.getElementById('dash-expected').textContent = `$${totalExpected.toFixed(2)}`;
+            document.getElementById('dash-outstanding').textContent = `$${(totalExpected - totalCollected).toFixed(2)}`;
+            
+            // Update color based on outstanding amount
+            document.getElementById('dash-outstanding').className = 
+                totalExpected - totalCollected > 0 ? 'number text-danger' : 'number text-success';
+            
+            // Tenant status list
+            const tbody = document.getElementById('dashboard-tenant-list');
+            tbody.innerHTML = '';
+            
+            let paidCount = 0, pendingCount = 0, lateCount = 0;
+            
+            if (tenants.length === 0) {
+                document.getElementById('dashboard-table-container').style.display = 'none';
+                document.getElementById('dashboard-empty').style.display = 'block';
+                document.getElementById('dashboard-summary').style.display = 'none';
+                return;
+            }
+            
+            document.getElementById('dashboard-table-container').style.display = 'block';
+            document.getElementById('dashboard-empty').style.display = 'none';
+            document.getElementById('dashboard-summary').style.display = 'block';
+            
+            tenants.forEach(tenant => {
+                const payment = payments.find(p => p.tenant_id === tenant.id);
+                let status = 'pending';
+                
+                if (payment) {
+                    status = 'paid';
+                    paidCount++;
+                } else if (today.getDate() > tenant.due_day) {
+                    status = 'late';
+                    lateCount++;
+                } else {
+                    pendingCount++;
+                }
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>
+                        <strong>${tenant.name}</strong>
+                        ${tenant.phone ? `<br><small class="text-muted">${tenant.phone}</small>` : ''}
+                    </td>
+                    <td>${tenant.property_address}</td>
+                    <td>$${tenant.monthly_rent.toFixed(2)}</td>
+                    <td>Day ${tenant.due_day}</td>
+                    <td>
+                        ${status === 'paid' ? `
+                            <span class="badge badge-paid"><i class="bi bi-check-circle me-1"></i>Paid</span>
+                            <br><small class="text-success">$${payment.amount_paid.toFixed(2)} on ${formatDate(payment.payment_date)}</small>
+                        ` : status === 'late' ? `
+                            <span class="badge badge-late"><i class="bi bi-exclamation-circle me-1"></i>Late</span>
+                        ` : `
+                            <span class="badge badge-pending"><i class="bi bi-clock me-1"></i>Pending</span>
+                        `}
+                    </td>
+                    <td>
+                        ${status !== 'paid' ? `
+                            <button class="btn btn-success btn-action" onclick="showPage('payments')">
+                                <i class="bi bi-cash-coin"></i> Pay
+                            </button>
+                        ` : ''}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            document.getElementById('count-paid').textContent = paidCount;
+            document.getElementById('count-pending').textContent = pendingCount;
+            document.getElementById('count-late').textContent = lateCount;
+        }
+
+        // Tenants Rendering
+        function renderTenants() {
+            const tenants = Storage.getTenants();
+            const tbody = document.getElementById('tenants-list');
+            tbody.innerHTML = '';
+            
+            document.getElementById('tenant-count').textContent = tenants.length;
+            
+            if (tenants.length === 0) {
+                document.getElementById('tenants-table-container').style.display = 'none';
+                document.getElementById('tenants-empty').style.display = 'block';
+                document.getElementById('tenants-stats').style.display = 'none';
+                return;
+            }
+            
+            document.getElementById('tenants-table-container').style.display = 'block';
+            document.getElementById('tenants-empty').style.display = 'none';
+            document.getElementById('tenants-stats').style.display = 'block';
+            
+            let totalMonthly = 0;
+            
+            tenants.forEach(tenant => {
+                totalMonthly += tenant.monthly_rent;
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>
+                        <strong>${tenant.name}</strong>
+                        ${tenant.phone ? `<br><small class="text-muted">${tenant.phone}</small>` : ''}
+                    </td>
+                    <td>${tenant.property_address}</td>
+                    <td>$${tenant.monthly_rent.toFixed(2)}</td>
+                    <td>Day ${tenant.due_day}</td>
+                    <td>
+                        <button class="btn btn-warning btn-sm" onclick="editTenant(${tenant.id})">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteTenant(${tenant.id})">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            document.getElementById('stats-total-tenants').textContent = tenants.length;
+            document.getElementById('stats-monthly-income').textContent = `$${totalMonthly.toFixed(2)}`;
+            document.getElementById('stats-annual-income').textContent = `$${(totalMonthly * 12).toFixed(2)}`;
+        }
+
+        function addTenant(name, address, rent, dueDay, phone, email) {
+            const tenants = Storage.getTenants();
+            tenants.push({
+                id: Date.now(),
+                name,
+                property_address: address,
+                monthly_rent: parseFloat(rent),
+                due_day: parseInt(dueDay),
+                phone,
+                email
+            });
+            Storage.saveTenants(tenants);
+            flash(`Tenant "${name}" added successfully!`, 'success');
+        }
+
+        function editTenant(id) {
+            const tenant = Storage.getTenants().find(t => t.id === id);
+            if (!tenant) return;
+            
+            document.getElementById('edit-tenant-id').value = tenant.id;
+            document.getElementById('edit-tenant-name').value = tenant.name;
+            document.getElementById('edit-tenant-name-display').textContent = tenant.name;
+            document.getElementById('edit-tenant-address').value = tenant.property_address;
+            document.getElementById('edit-tenant-rent').value = tenant.monthly_rent;
+            document.getElementById('edit-tenant-dueday').value = tenant.due_day;
+            document.getElementById('edit-tenant-phone').value = tenant.phone || '';
+            document.getElementById('edit-tenant-email').value = tenant.email || '';
+            
+            showPage('edit-tenant');
+        }
+
+        function updateTenant(id, name, address, rent, dueDay, phone, email) {
+            const tenants = Storage.getTenants();
+            const index = tenants.findIndex(t => t.id === parseInt(id));
+            if (index !== -1) {
+                tenants[index] = {
+                    ...tenants[index],
+                    name,
+                    property_address: address,
+                    monthly_rent: parseFloat(rent),
+                    due_day: parseInt(dueDay),
+                    phone,
+                    email
+                };
+                Storage.saveTenants(tenants);
+                flash(`Tenant "${name}" updated!`, 'success');
+            }
+        }
+
+        function deleteTenant(id) {
+            if (!confirm('Delete this tenant? This cannot be undone.')) return;
+            
+            const tenants = Storage.getTenants().filter(t => t.id !== id);
+            // Also delete associated payments
+            const payments = Storage.getPayments().filter(p => p.tenant_id !== id);
+            
+            Storage.saveTenants(tenants);
+            Storage.savePayments(payments);
+            
+            renderTenants();
+            flash('Tenant deleted.', 'warning');
+        }
+
+        // Payments Rendering
+        function renderPayments() {
+            const tenants = Storage.getTenants();
+            const payments = Storage.getPayments();
+            
+            // Update tenant select
+            const select = document.getElementById('payment-tenant');
+            select.innerHTML = '<option value="">Select tenant...</option>';
+            tenants.forEach(t => {
+                select.innerHTML += `<option value="${t.id}" data-rent="${t.monthly_rent}">${t.name} - $${t.monthly_rent}</option>`;
+            });
+            
+            // Set default month
+            document.getElementById('payment-month').value = new Date().toISOString().slice(0, 7);
+            
+            // Show/hide based on tenants
+            if (tenants.length === 0) {
+                document.getElementById('payment-form-container').style.display = 'none';
+                document.getElementById('payment-no-tenants').style.display = 'block';
+            } else {
+                document.getElementById('payment-form-container').style.display = 'block';
+                document.getElementById('payment-no-tenants').style.display = 'none';
+            }
+            
+            // Render history
+            const tbody = document.getElementById('payments-list');
+            tbody.innerHTML = '';
+            
+            document.getElementById('payment-count').textContent = payments.length;
+            
+            if (payments.length === 0) {
+                document.getElementById('payments-table-container').style.display = 'none';
+                document.getElementById('payments-empty').style.display = 'block';
+                return;
+            }
+            
+            document.getElementById('payments-table-container').style.display = 'block';
+            document.getElementById('payments-empty').style.display = 'none';
+            
+            // Sort by date descending
+            const sortedPayments = [...payments].sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date));
+            
+            sortedPayments.slice(0, 30).forEach(p => {
+                const tenant = tenants.find(t => t.id === p.tenant_id);
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${formatDate(p.payment_date)}</td>
+                    <td>
+                        <strong>${tenant ? tenant.name : 'Unknown'}</strong>
+                        ${tenant ? `<br><small class="text-muted">${tenant.property_address}</small>` : ''}
+                    </td>
+                    <td>${formatMonth(p.for_month)}</td>
+                    <td><span class="text-success fw-bold">$${p.amount_paid.toFixed(2)}</span></td>
+                    <td>
+                        <span class="badge bg-light text-dark border">${p.payment_method}</span>
+                        ${p.notes ? `<br><small class="text-muted">${p.notes}</small>` : ''}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function addPayment(tenantId, amount, month, method, notes) {
+            const payments = Storage.getPayments();
+            payments.push({
+                id: Date.now(),
+                tenant_id: parseInt(tenantId),
+                amount_paid: parseFloat(amount),
+                for_month: month,
+                payment_method: method,
+                notes,
+                payment_date: new Date().toISOString()
+            });
+            Storage.savePayments(payments);
+            flash('Payment logged successfully!', 'success');
+        }
+
+        // Settings
+        function renderSettings() {
+            const user = Storage.getCurrentUser();
+            if (!user) return;
+            
+            document.getElementById('settings-email').value = user.email;
+            document.getElementById('settings-firstname').value = user.first_name || '';
+            document.getElementById('reminder-enabled').checked = user.reminder_enabled;
+            document.getElementById('reminder-days').value = user.reminder_days_before || 3;
+            document.getElementById('reminder-time').value = user.reminder_time || '09:00';
+        }
+
+        function updateProfile(email, firstName, password) {
+            const user = Storage.getCurrentUser();
+            if (!user) return;
+            
+            user.email = email;
+            user.first_name = firstName;
+            if (password) user.password = password;
+            
+            Storage.saveCurrentUser(user);
+            
+            // Update in users array
+            const users = Storage.getUsers();
+            const index = users.findIndex(u => u.id === user.id);
+            if (index !== -1) {
+                users[index] = user;
+                Storage.saveUsers(users);
+            }
+            
+            document.getElementById('nav-user-name').textContent = firstName || 'Account';
+            flash('Profile saved!', 'success');
+        }
+
+        function updateReminders(enabled, days, time) {
+            const user = Storage.getCurrentUser();
+            if (!user) return;
+            
+            user.reminder_enabled = enabled;
+            user.reminder_days_before = parseInt(days);
+            user.reminder_time = time;
+            
+            Storage.saveCurrentUser(user);
+            
+            const users = Storage.getUsers();
+            const index = users.findIndex(u => u.id === user.id);
+            if (index !== -1) {
+                users[index] = user;
+                Storage.saveUsers(users);
+            }
+            
+            flash('Settings saved!', 'success');
+        }
+
+        function testEmail() {
+            flash('Test email sent! (Simulation - email feature requires backend)', 'info');
+        }
+
+        // Export CSV
+        function exportCSV() {
+            const tenants = Storage.getTenants();
+            const payments = Storage.getPayments();
+            
+            let csv = 'Tenant,Property,Phone,Email,Monthly Rent,Due Day,Payment Month,Amount Paid,Payment Date,Method,Notes\n';
+            
+            tenants.forEach(tenant => {
+                const tenantPayments = payments.filter(p => p.tenant_id === tenant.id);
+                if (tenantPayments.length > 0) {
+                    tenantPayments.forEach(p => {
+                        csv += `${escapeCsv(tenant.name)},${escapeCsv(tenant.property_address)},${escapeCsv(tenant.phone)},${escapeCsv(tenant.email)},${tenant.monthly_rent},${tenant.due_day},${p.for_month},${p.amount_paid},${formatDate(p.payment_date)},${p.payment_method},${escapeCsv(p.notes)}\n`;
+                    });
+                } else {
+                    csv += `${escapeCsv(tenant.name)},${escapeCsv(tenant.property_address)},${escapeCsv(tenant.phone)},${escapeCsv(tenant.email)},${tenant.monthly_rent},${tenant.due_day},No payments,,,,\n`;
+                }
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `rentkeepers_export_${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            
+            flash('CSV exported!', 'success');
+        }
+
+        // Helpers
+        function formatMonth(monthStr) {
+            if (!monthStr || monthStr.length !== 7) return monthStr;
+            const [year, month] = monthStr.split('-');
+            const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+            return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        }
+
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+
+        function escapeCsv(str) {
+            if (!str) return '';
+            if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                return '"' + str.replace(/"/g, '""') + '"';
+            }
+            return str;
+        }
+
+        // Event Listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            initDemoData();
+            
+            // Check for logged in user
+            const currentUser = Storage.getCurrentUser();
+            if (currentUser) {
+                document.body.classList.add('logged-in');
+                document.getElementById('nav-user-name').textContent = currentUser.first_name || 'Account';
+            }
+            
+            // Login form
+            document.getElementById('login-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const email = document.getElementById('login-email').value;
+                const password = document.getElementById('login-password').value;
+                if (!login(email, password)) {
+                    flash('Invalid email or password.', 'danger');
+                }
+            });
+            
+            // Register form
+            document.getElementById('register-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const firstName = document.getElementById('register-firstname').value;
+                const email = document.getElementById('register-email').value;
+                const password = document.getElementById('register-password').value;
+                register(firstName, email, password);
+            });
+            
+            // Add tenant form
+            document.getElementById('add-tenant-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                addTenant(
+                    document.getElementById('tenant-name').value,
+                    document.getElementById('tenant-address').value,
+                    document.getElementById('tenant-rent').value,
+                    document.getElementById('tenant-dueday').value,
+                    document.getElementById('tenant-phone').value,
+                    document.getElementById('tenant-email').value
+                );
+                e.target.reset();
+                document.getElementById('tenant-dueday').value = 1;
+                renderTenants();
+            });
+            
+            // Edit tenant form
+            document.getElementById('edit-tenant-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                updateTenant(
+                    document.getElementById('edit-tenant-id').value,
+                    document.getElementById('edit-tenant-name').value,
+                    document.getElementById('edit-tenant-address').value,
+                    document.getElementById('edit-tenant-rent').value,
+                    document.getElementById('edit-tenant-dueday').value,
+                    document.getElementById('edit-tenant-phone').value,
+                    document.getElementById('edit-tenant-email').value
+                );
+                showPage('tenants');
+                renderTenants();
+            });
+            
+            // Payment form
+            document.getElementById('add-payment-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                addPayment(
+                    document.getElementById('payment-tenant').value,
+                    document.getElementById('payment-amount').value,
+                    document.getElementById('payment-month').value,
+                    document.getElementById('payment-method').value,
+                    document.getElementById('payment-notes').value
+                );
+                e.target.reset();
+                document.getElementById('payment-month').value = new Date().toISOString().slice(0, 7);
+                renderPayments();
+            });
+            
+            // Payment tenant select - auto-fill rent
+            document.getElementById('payment-tenant').addEventListener('change', function() {
+                const selected = this.options[this.selectedIndex];
+                const rent = selected.getAttribute('data-rent');
+                if (rent) {
+                    document.getElementById('payment-amount').value = rent;
+                    document.getElementById('payment-rent-hint').innerHTML = 
+                        `<span class="text-muted">Monthly rent: $${parseFloat(rent).toFixed(2)}</span>`;
+                }
+            });
+            
+            // Profile form
+            document.getElementById('profile-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                updateProfile(
+                    document.getElementById('settings-email').value,
+                    document.getElementById('settings-firstname').value,
+                    document.getElementById('settings-password').value
+                );
+                document.getElementById('settings-password').value = '';
+            });
+            
+            // Reminders form
+            document.getElementById('reminders-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                updateReminders(
+                    document.getElementById('reminder-enabled').checked,
+                    document.getElementById('reminder-days').value,
+                    document.getElementById('reminder-time').value
+                );
+            });
+            
+            // Handle hash routing
+            const hash = window.location.hash.slice(1);
+            if (currentUser && hash && document.getElementById(`page-${hash}`)) {
+                showPage(hash);
+            } else if (currentUser) {
+                showPage('dashboard');
+            } else {
+                showPage('login');
+            }
+        });
+    </script>
+</body>
+</html>

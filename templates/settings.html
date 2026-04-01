@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - RentKeepers{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Profile Settings -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-person me-2"></i>Profile Settings
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email Address</label>
+                        <input type="email" class="form-control" id="email" name="email" 
+                               value="{{ user.email }}" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="first_name" class="form-label">First Name</label>
+                        <input type="text" class="form-control" id="first_name" name="first_name" 
+                               value="{{ user.first_name or '' }}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="new_password" class="form-label">New Password (leave blank to keep current)</label>
+                        <input type="password" class="form-control" id="new_password" name="new_password">
+                        <div class="form-text">Minimum 6 characters</div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save me-2"></i>Save Profile
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Email Reminder Settings -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-envelope me-2"></i>Email Reminders
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="reminder_enabled" 
+                               name="reminder_enabled" {% if user.reminder_enabled %}checked{% endif %}>
+                        <label class="form-check-label" for="reminder_enabled">
+                            <strong>Enable email reminders</strong>
+                        </label>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="reminder_days_before" class="form-label">Send reminder how many days before rent is due?</label>
+                        <select class="form-select" id="reminder_days_before" name="reminder_days_before">
+                            <option value="1" {% if user.reminder_days_before == 1 %}selected{% endif %}>1 day before</option>
+                            <option value="2" {% if user.reminder_days_before == 2 %}selected{% endif %}>2 days before</option>
+                            <option value="3" {% if user.reminder_days_before == 3 %}selected{% endif %}>3 days before</option>
+                            <option value="5" {% if user.reminder_days_before == 5 %}selected{% endif %}>5 days before</option>
+                            <option value="7" {% if user.reminder_days_before == 7 %}selected{% endif %}>1 week before</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="reminder_time" class="form-label">What time to send reminders?</label>
+                        <input type="time" class="form-control" id="reminder_time" name="reminder_time" 
+                               value="{{ user.reminder_time or '09:00' }}">
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save me-2"></i>Save Reminder Settings
+                        </button>
+                        <a href="{{ url_for('test_email') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-send me-2"></i>Send Test Email
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Email Configuration Help -->
+        <div class="card mt-3">
+            <div class="card-header bg-light">
+                <i class="bi bi-info-circle me-2"></i>Email Setup
+            </div>
+            <div class="card-body">
+                <p>To send email reminders, create a <code>.env</code> file in the rentkeepers folder with:</p>
+                <pre class="bg-light p-2 rounded">MAIL_USERNAME=your_email@gmail.com
+MAIL_PASSWORD=your_app_password</pre>
+                <p class="mb-0 small"><strong>Gmail users:</strong> Use an <a href="https://myaccount.google.com/apppasswords" target="_blank">App Password</a> (not your regular password).</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

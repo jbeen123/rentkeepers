@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Tenants - RentKeepers{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Add Tenant Form -->
+    <div class="col-lg-4 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-person-plus me-2"></i>Add New Tenant
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('add_tenant') }}" method="POST">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Tenant Name *</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="property_address" class="form-label">Property Address *</label>
+                        <input type="text" class="form-control" id="property_address" name="property_address" 
+                               placeholder="123 Main St, Apt 4B" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="monthly_rent" class="form-label">Monthly Rent ($) *</label>
+                        <input type="number" class="form-control" id="monthly_rent" name="monthly_rent" 
+                               step="0.01" min="0" placeholder="1200.00" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="due_day" class="form-label">Rent Due Day (1-31) *</label>
+                        <input type="number" class="form-control" id="due_day" name="due_day" 
+                               min="1" max="31" value="1" required>
+                        <div class="form-text">Day of month rent is due</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="phone" class="form-label">Phone Number</label>
+                        <input type="tel" class="form-control" id="phone" name="phone" 
+                               placeholder="(555) 123-4567">
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Tenant Email (for reminders)</label>
+                        <input type="email" class="form-control" id="email" name="email" 
+                               placeholder="tenant@example.com">
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-plus-circle me-2"></i>Add Tenant
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tenant List -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-people me-2"></i>All Tenants
+                <span class="badge bg-secondary ms-2">{{ tenants | length }}</span>
+            </div>
+            <div class="card-body p-0">
+                {% if tenants %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Property</th>
+                                <th>Monthly Rent</th>
+                                <th>Due Day</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for tenant in tenants %}
+                            <tr>
+                                <td>
+                                    <strong>{{ tenant.name }}</strong>
+                                    {% if tenant.phone %}
+                                        <br><small class="text-muted">{{ tenant.phone }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>{{ tenant.property_address }}</td>
+                                <td>${{ "%.2f" | format(tenant.monthly_rent) }}</td>
+                                <td>Day {{ tenant.due_day }}</td>
+                                <td>
+                                    <a href="{{ url_for('edit_tenant', tenant_id=tenant.id) }}" 
+                                       class="btn btn-warning btn-sm">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <form action="{{ url_for('delete_tenant', tenant_id=tenant.id) }}" 
+                                          method="POST" class="d-inline" 
+                                          onsubmit="return confirm('Delete {{ tenant.name }}? This cannot be undone.');">
+                                        <button type="submit" class="btn btn-danger btn-sm">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-person text-muted" style="font-size: 3rem;"></i>
+                    <p class="mt-3 text-muted">No tenants yet. Add one on the left!</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Summary Stats -->
+        {% if tenants %}
+        <div class="card mt-3">
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col">
+                        <h5 class="text-primary">{{ tenants | length }}</h5>
+                        <small class="text-muted">Total Tenants</small>
+                    </div>
+                    <div class="col">
+                        <h5 class="text-success">${{ "%.2f" | format(tenants | map(attribute='monthly_rent') | sum) }}</h5>
+                        <small class="text-muted">Total Monthly Income</small>
+                    </div>
+                    <div class="col">
+                        <h5 class="text-info">${{ "%.2f" | format((tenants | map(attribute='monthly_rent') | sum) * 12) }}</h5>
+                        <small class="text-muted">Annual Income</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
