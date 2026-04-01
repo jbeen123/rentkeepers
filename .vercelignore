@@ -1,0 +1,28 @@
+# Ignore Python/Flask files for static deployment
+app.py
+models.py
+requirements.txt
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment files (already in .gitignore but double protection)
+.env
+.env.local
+.env.production
+.env.development
+
+# Templates (not needed for static HTML version)
+templates/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
