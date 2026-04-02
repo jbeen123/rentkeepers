@@ -1,0 +1,71 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "name": "RentKeepers",
+  "description": "Simple rent tracking for landlords. Free for 3 tenants, $9/mo unlimited.",
+  "categories": ["Finance", "Business", "SaaS"],
+  "icon": "https://emojicdn.elk.sh/🏠",
+  "readme": "README.md",
+  "env": {
+    "SECRET_KEY": {
+      "description": "Flask secret key for session security",
+      "required": true,
+      "default": ""
+    },
+    "MAIL_USERNAME": {
+      "description": "Gmail address for sending reminders",
+      "required": false,
+      "default": ""
+    },
+    "MAIL_PASSWORD": {
+      "description": "Gmail App Password (not your regular password)",
+      "required": false,
+      "default": ""
+    },
+    "STRIPE_SECRET_KEY": {
+      "description": "Stripe Secret Key (sk_live_... or sk_test_...)",
+      "required": false,
+      "default": ""
+    },
+    "STRIPE_PUBLISHABLE_KEY": {
+      "description": "Stripe Publishable Key (pk_live_... or pk_test_...)",
+      "required": false,
+      "default": ""
+    },
+    "STRIPE_WEBHOOK_SECRET": {
+      "description": "Stripe Webhook Secret (whsec_...)",
+      "required": false,
+      "default": ""
+    },
+    "STRIPE_PRICE_MONTHLY": {
+      "description": "Stripe Price ID for monthly subscription",
+      "required": false,
+      "default": ""
+    },
+    "STRIPE_PRICE_YEARLY": {
+      "description": "Stripe Price ID for yearly subscription",
+      "required": false,
+      "default": ""
+    }
+  },
+  "services": {
+    "web": {
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "Dockerfile"
+      },
+      "deploy": {
+        "startCommand": "gunicorn --bind 0.0.0.0:$PORT --workers 2 app:app",
+        "healthcheckPath": "/",
+        "healthcheckTimeout": 30
+      }
+    },
+    "postgres": {
+      "image": "postgres:15",
+      "variables": {
+        "POSTGRES_DB": "rentkeepers",
+        "POSTGRES_USER": "postgres",
+        "POSTGRES_PASSWORD": "${{secret(32)}}"
+      }
+    }
+  }
+}

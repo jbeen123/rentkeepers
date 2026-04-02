@@ -2,88 +2,96 @@
 
 Simple rent tracking for landlords who don't need bloated software.
 
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/REPLACEME)
+
 ## Features
 
-- ✅ User authentication (register/login)
-- ✅ Add/manage tenants and properties
-- ✅ Track monthly rent payments
-- ✅ Visual dashboard showing who's paid, pending, or late
-- ✅ Email reminders for upcoming/outstanding rent
-- ✅ Export to CSV for tax time
-- ✅ Clean, simple UI - no unnecessary features
+- ✅ **Free tier** — Up to 3 tenants, no credit card required
+- ✅ **Premium** — $9/mo or $79/yr for unlimited tenants
+- ✅ **Lifetime** — $149 one-time payment
+- ✅ Tenant management & payment tracking
+- ✅ Email reminders for upcoming rent
+- ✅ CSV export for tax time
+- ✅ Clean, simple UI
 
 ## Quick Start
 
-### 1. Install dependencies
+### One-Click Deploy (Recommended)
+
+Click the button above to deploy to Railway. You'll get:
+- Automatic PostgreSQL database
+- SSL certificate
+- Custom domain
+- Zero config required
+
+### Manual Deploy
 
 ```bash
+# Clone repo
+git clone https://github.com/jbeen123/rentkeepers.git
 cd rentkeepers
+
+# Install dependencies
 pip install -r requirements.txt
-```
 
-### 2. Configure email (optional - for reminders)
-
-Copy `.env.example` to `.env` and fill in your email settings:
-
-```bash
+# Setup environment
 cp .env.example .env
-```
+# Edit .env with your settings
 
-Then edit `.env` with your email credentials.
+# Run migrations
+python -c "from models import init_db; init_db()"
 
-### 3. Run the app
-
-```bash
+# Start app
 python app.py
 ```
 
-### 4. Open in browser
+## Environment Variables
 
-Go to `http://localhost:5000` and register an account.
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SECRET_KEY` | ✅ | Flask secret key |
+| `DATABASE_URL` | ✅ | PostgreSQL connection string |
+| `MAIL_USERNAME` | ❌ | Gmail for email reminders |
+| `MAIL_PASSWORD` | ❌ | Gmail App Password |
+| `STRIPE_SECRET_KEY` | ❌ | For payments |
+| `STRIPE_PUBLISHABLE_KEY` | ❌ | For payments |
+| `STRIPE_WEBHOOK_SECRET` | ❌ | For Stripe webhooks |
+| `STRIPE_PRICE_MONTHLY` | ❌ | Stripe monthly price ID |
 
-## Project Structure
+## Pricing
 
-```
-rentkeepers/
-├── app.py              # Flask application
-├── models.py           # Database models (SQLAlchemy)
-├── requirements.txt    # Python dependencies
-├── .env.example        # Environment variables template
-├── templates/          # HTML templates
-│   ├── base.html
-│   ├── dashboard.html
-│   ├── login.html
-│   ├── register.html
-│   ├── settings.html
-│   ├── tenants.html
-│   ├── edit_tenant.html
-│   └── payments.html
-└── rentkeepers.db      # SQLite database (auto-created)
-```
+| Plan | Price | Tenants | Features |
+|------|-------|---------|----------|
+| Free | $0 | 3 | Basic tracking, CSV export |
+| Monthly | $9/mo | Unlimited | Email reminders, import/export |
+| Yearly | $79/yr | Unlimited | Same as monthly, 27% off |
+| Lifetime | $149 | Unlimited | One-time payment |
 
-## Email Reminders Setup
+## Screenshots
 
-To send email reminders:
+*Dashboard showing rent status, outstanding amounts, and payment history.*
 
-1. Create a Gmail account (or use existing)
-2. Enable 2-factor authentication
-3. Generate an App Password at https://myaccount.google.com/apppasswords
-4. Add to your `.env` file:
-   ```
-   MAIL_USERNAME=your_email@gmail.com
-   MAIL_PASSWORD=your_app_password
-   ```
-5. Go to Settings in RentKeepers and enable reminders
+## Tech Stack
 
-## Pricing Ideas
+- **Backend:** Flask + SQLAlchemy + PostgreSQL
+- **Frontend:** Bootstrap 5 + vanilla JS
+- **Payments:** Stripe
+- **Email:** Flask-Mail (Gmail SMTP)
+- **Deploy:** Docker + Railway
 
-- **Free tier:** Up to 3 tenants
-- **Paid tier:** $9/month or $79/year for unlimited tenants
-- **One-time:** $149 lifetime license
+## Contributing
 
-## Next Steps
+This is a solo project but open to PRs. Main areas:
+- Mobile app (React Native?)
+- ACH payments integration
+- Tenant portal (for renters to pay online)
 
-1. Test locally, add some dummy tenants/payments
-2. Deploy to a VPS or Railway/Render
-3. Add Stripe for payments
-4. Market to landlords on Reddit (r/RealEstate, r/landlords) and Facebook groups
+## License
+
+MIT License - use it, modify it, sell it.
+
+---
+
+**Support:** support@rentkeepers.com
+
+**Roadmap:** [GitHub Issues](https://github.com/jbeen123/rentkeepers/issues)
