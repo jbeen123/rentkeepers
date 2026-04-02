@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Pricing - RentKeepers{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mb-5">
+    <div class="col-md-8 text-center">
+        <h1 class="mb-4">Simple Pricing</h1>
+        <p class="lead text-muted">Start free. Upgrade when you need more.</p>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <!-- Free Tier -->
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header text-center">
+                <h4 class="mb-0">Free</h4>
+                <div class="text-muted">For getting started</div>
+            </div>
+            <div class="card-body text-center">
+                <div class="display-5 mb-3">$0</div>
+                <ul class="list-unstyled text-start">
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Up to 3 tenants</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Basic dashboard</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Payment tracking</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>CSV export</li>
+                    <li class="mb-2 text-muted"><i class="bi bi-x-circle text-muted me-2"></i>No email reminders</li>
+                </ul>
+                </div>
+            <div class="card-footer border-0 bg-transparent text-center pb-4">
+                {% if current_user.is_authenticated %}
+                    <button class="btn btn-outline-primary w-100" disabled>Current Plan</button>
+                {% else %}
+                    <a href="{{ url_for('register') }}" class="btn btn-outline-primary w-100">Get Started Free</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Premium Monthly -->
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 border-primary">
+            <div class="card-header text-center bg-primary text-white">
+                <h4 class="mb-0">Premium</h4>
+                <div>Most popular</div>
+            </div>
+            <div class="card-body text-center">
+                <div class="display-5 mb-3">{{ monthly_price }}<span class="fs-6">/month</span></div>
+                <ul class="list-unstyled text-start">
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Unlimited</strong> tenants</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Email reminders</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>CSV import/export</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Priority support</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Cancel anytime</li>
+                </ul>
+            </div>
+            <div class="card-footer border-0 bg-transparent text-center pb-4">
+                {% if current_user.is_authenticated %}
+                    {% if current_user.subscription_tier == 'free' %}
+                        <form action="{{ url_for('checkout') }}" method="POST">
+                            <input type="hidden" name="tier" value="monthly">
+                            <button type="submit" class="btn btn-primary w-100">Upgrade Now</button>
+                        </form>
+                    {% else %}
+                        <button class="btn btn-success w-100" disabled>Subscribed</button>
+                    {% endif %}
+                {% else %}
+                    <a href="{{ url_for('register') }}" class="btn btn-primary w-100">Get Started</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Lifetime -->
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header text-center">
+                <h4 class="mb-0">Lifetime</h4>
+                <div class="text-muted">Pay once, own forever</div>
+            </div>
+            <div class="card-body text-center">
+                <div class="display-5 mb-3">{{ lifetime_price }}<span class="fs-6"></span></div>
+                <ul class="list-unstyled text-start">
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Everything</strong> in Premium</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>One-time payment</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>No monthly fees</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>All future updates</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Best value</li>
+                </ul>
+            </div>
+            <div class="card-footer border-0 bg-transparent text-center pb-4">
+                <a href="mailto:support@rentkeepers.com?subject=Lifetime%20Purchase" class="btn btn-outline-dark w-100">Contact Sales</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row justify-content-center mt-5">
+    <div class="col-md-8 text-center">
+        <h4 class="mb-3">Questions?</h4>
+        <p class="text-muted">
+            Email us at <a href="mailto:support@rentkeepers.com">support@rentkeepers.com</a><br>
+            30-day money-back guarantee on all paid plans.
+        </p>
+    </div>
+</div>
+{% endblock %}
