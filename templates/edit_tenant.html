@@ -50,6 +50,42 @@
                         </a>
                     </div>
                 </form>
+
+                <hr class="my-4">
+
+                <!-- Tenant Portal Section -->
+                <div class="border rounded p-3">
+                    <h6 class="mb-3"><i class="bi bi-person-workspace me-2"></i>Tenant Portal Access</h6>
+
+                    {% if tenant.portal_enabled %}
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle me-2"></i>Portal is <strong>active</strong>
+                        </div>
+                        <p class="small text-muted mb-2">Tenant can access their portal at:</p>
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control form-control-sm" value="{{ url_for('tenant_portal', token=tenant.portal_token, _external=True) }}" readonly>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="navigator.clipboard.writeText(this.previousElementSibling.value)" type="button">Copy</button>
+                        </div>
+                        <form action="{{ url_for('disable_tenant_portal', tenant_id=tenant.id) }}" method="POST">
+                            <button type="submit" class="btn btn-outline-danger btn-sm w-100">
+                                <i class="bi bi-x-circle me-2"></i>Revoke Portal Access
+                            </button>
+                        </form>
+                    {% else %}
+                        <p class="text-muted small">Enable portal to give tenant online access to their rent status and payment history.</p>
+                        {% if tenant.email %}
+                            <form action="{{ url_for('enable_tenant_portal', tenant_id=tenant.id) }}" method="POST">
+                                <button type="submit" class="btn btn-success btn-sm w-100">
+                                    <i class="bi bi-envelope me-2"></i>Send Portal Invite
+                                </button>
+                            </form>
+                        {% else %}
+                            <div class="alert alert-warning small">
+                                <i class="bi bi-exclamation-triangle me-2"></i>Add tenant email to enable portal
+                            </div>
+                        {% endif %}
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>

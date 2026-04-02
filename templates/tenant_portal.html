@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}{{ tenant.name }} - Tenant Portal{% endblock %}
+
+{% block content %}
+<style>
+    body { background-color: #f5f7fa; }
+    .portal-header {
+        background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+        color: white;
+        padding: 40px 0;
+        margin-bottom: 30px;
+    }
+</style>
+
+<div class="portal-header">
+    <div class="container">
+        <h1 class="mb-2"><i class="bi bi-house-check-fill me-2"></i>Tenant Portal</h1>
+        <p class="mb-0 opacity-75">{{ tenant.name }} • {{ tenant.property_address }}</p>
+    </div>
+</div>
+
+<div class="container">
+    <!-- Rent Status Card -->
+    <div class="row justify-content-center mb-4">
+        <div class="col-md-6">
+            <div class="card border-0 shadow-lg">
+                <div class="card-body text-center p-5">
+                    {% if status == 'paid' %}
+                        <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+                        <h3 class="mt-3 text-success">Rent Paid</h3>
+                        <p class="text-muted">Thank you for your payment!</p>
+                    {% elif status == 'late' %}
+                        <i class="bi bi-exclamation-circle-fill text-danger" style="font-size: 4rem;"></i>
+                        <h3 class="mt-3 text-danger">Rent Overdue</h3>
+                        <p class="text-muted">Payment was due on {{ due_date.strftime('%B %d') }}</p>
+                    {% else %}
+                        <i class="bi bi-clock-fill text-warning" style="font-size: 4rem;"></i>
+                        <h3 class="mt-3 text-warning">Rent Due Soon</h3>
+                        <p class="text-muted">Due on {{ due_date.strftime('%B %d') }}</p>
+                    {% endif %}
+                    
+                    <div class="mt-4">
+                        <h2 class="mb-0">${{ "%.2f"|format(amount_due) }}</h2>
+                        <small class="text-muted">{{ current_month|month_name }}</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Instructions -->
+    {% if amount_due > 0 %}
+    <div class="row justify-content-center mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-white">
+                    <i class="bi bi-credit-card me-2"></i>Payment Options
+                </div>
+                <div class="card-body">
+                    <p>Please contact your landlord to arrange payment:</p>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item">
+                            <i class="bi bi-cash-stack me-2 text-success"></i>
+                            <strong>Amount Due:</strong> ${{ "%.2f"|format(amount_due) }}
+                        </li>
+                        {% if tenant.user.phone %}
+                        <li class="list-group-item">
+                            <i class="bi bi-telephone me-2 text-primary"></i>
+                            <strong>Phone:</strong> {{ tenant.user.phone }}
+                        </li>
+                        {% endif %}
+                        <li class="list-group-item">
+                            <i class="bi bi-envelope me-2 text-primary"></i>
+                            <strong>Email:</strong> {{ tenant.user.email }}
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Payment History -->
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-white">
+                    <i class="bi bi-clock-history me-2"></i>Payment History
+                </div>
+                <div class="card-body p-0">
+                    {% if payments %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Month</th>
+                                    <th>Date Paid</th>
+                                    <th>Amount</th>
+                                    <th>Method</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for payment in payments %}
+                                <tr>
+                                    <td>{{ payment.for_month|month_name }}</td>
+                                    <td>{{ payment.payment_date.strftime('%b %d, %Y') }}</td>
+                                    <td><span class="text-success fw-bold">${{ "%.2f"|format(payment.amount_paid) }}</span></td>
+                                    <td><span class="badge bg-light text-dark border">{{ payment.payment_method }}</span></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-receipt text-muted" style="font-size: 3rem;"></i>
+                        <p class="mt-3 text-muted">No payment history yet.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="text-center mt-5 mb-4 text-muted">
+        <small>
+            Powered by <strong>RentKeepers</strong> • 
+            <a href="mailto:support@rentkeepers.com">Need help?</a>
+        </small>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Auto-refresh every 5 minutes to show updated status
+    setTimeout(function() {
+        location.reload();
+    }, 300000);
+</script>
+{% endblock %}

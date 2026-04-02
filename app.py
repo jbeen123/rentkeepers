@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file, jsonify, session
+from flask import Flask, render_template, request, redirect, url_for, flash, send_file, jsonify, session, abort
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_mail import Mail, Message
 from flask_limiter import Limiter
@@ -6,12 +6,14 @@ from flask_limiter.util import get_remote_address
 from apscheduler.schedulers.background import BackgroundScheduler
 from models import init_db, get_db_session, User, Tenant, Payment, Invoice, AuditLog, log_action
 from datetime import datetime, date, timedelta
+from functools import wraps
 import calendar
 import csv
 import io
 import os
 import json
 import stripe
+import secrets
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -62,14 +64,126 @@ def load_user(user_id):
     db.close()
     return user
 
-# Email reminder scheduler
+# ============== EMAIL FUNCTIONS ==============
+
+def send_email(to, subject, body, html_body=None):
+    """Send email with error handling"""
+    if not app.config['MAIL_USERNAME']:
+        print(f"[EMAIL] Would send to {to}: {subject}")
+        return False
+    
+    try:
+        msg = Message(
+            subject=subject,
+            recipients=[to],
+            body=body,
+            html=html_body
+        )
+        mail.send(msg)
+        print(f"[EMAIL] Sent to {to}: {subject}")
+        return True
+    except Exception as e:
+        print(f"[EMAIL ERROR] Failed to send to {to}: {e}")
+        return False
+
+def send_tenant_invite(tenant, portal_url):
+    """Send portal access email to tenant"""
+    body = f"""Hi {tenant.name},
+
+Your landlord has invited you to RentKeepers tenant portal.
+
+You can view your rent status and make payments here:
+{portal_url}
+
+This link is unique to you. Keep it private.
+
+---
+RentKeepers Tenant Portal
+"""
+    
+    html = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Welcome to RentKeepers Tenant Portal</h2>
+        <p>Hi {tenant.name},</p>
+        <p>Your landlord has invited you to access your rent information online.</p>
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{portal_url}" style="background: #27ae60; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Access Your Portal</a>
+        </div>
+        <p style="color: #666; font-size: 14px;">Or copy this link: {portal_url}</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+        <p style="color: #999; font-size: 12px;">This link is unique to you. Keep it private.</p>
+    </body>
+    </html>
+    """
+    
+    return send_email(tenant.email, "Your RentKeepers Tenant Portal", body, html)
+
+def send_rent_reminder_email(user, tenant, due_date, days_until):
+    """Send rent reminder to landlord"""
+    status = "overdue" if days_until < 0 else f"due in {days_until} days"
+    
+    body = f"""Hi {user.first_name or 'Landlord'},
+
+This is a reminder that rent is {status} for:
+
+Tenant: {tenant.name}
+Property: {tenant.property_address}
+Amount: ${tenant.monthly_rent:.2f}
+Due Date: {due_date.strftime('%B %d, %Y')}
+
+Log in to RentKeepers to record the payment or send a reminder to your tenant.
+
+---
+RentKeepers
+"""
+    
+    return send_email(user.email, f"Rent {status.title()} - {tenant.name}", body)
+
+def send_tenant_payment_confirmation(tenant, payment, landlord_name):
+    """Send receipt to tenant after payment"""
+    body = f"""Hi {tenant.name},
+
+Your rent payment has been recorded:
+
+Amount: ${payment.amount_paid:.2f}
+For: {payment.for_month}
+Property: {tenant.property_address}
+Date: {payment.payment_date.strftime('%B %d, %Y')}
+Method: {payment.payment_method}
+
+Thank you!
+
+---
+{landlord_name} via RentKeepers
+"""
+    
+    html = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #27ae60;">✓ Payment Recorded</h2>
+        <p>Hi {tenant.name},</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Amount:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${payment.amount_paid:.2f}</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>For:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{payment.for_month}</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Date:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{payment.payment_date.strftime('%B %d, %Y')}</td></tr>
+            <tr><td style="padding: 8px;"><strong>Method:</strong></td><td style="padding: 8px;">{payment.payment_method}</td></tr>
+        </table>
+        <p>Thank you!</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+        <p style="color: #999; font-size: 12px;">{landlord_name} via RentKeepers</p>
+    </body>
+    </html>
+    """
+    
+    return send_email(tenant.email, f"Rent Payment Confirmed - {payment.for_month}", body, html)
+
+# ============== SCHEDULER ==============
+
 scheduler = BackgroundScheduler()
 
-def send_rent_reminders():
-    """Check for upcoming rent due dates and send reminders"""
-    if not app.config['MAIL_USERNAME']:
-        return
-    
+def check_and_send_reminders():
+    """Check for rent due dates and send reminders"""
     db = get_db_session()
     
     try:
@@ -87,6 +201,7 @@ def send_rent_reminders():
             tenants = db.query(Tenant).filter_by(user_id=user.id).all()
             
             for tenant in tenants:
+                # Calculate due date
                 due_day = min(tenant.due_day, calendar.monthrange(today.year, today.month)[1])
                 due_date = date(today.year, today.month, due_day)
                 days_until_due = (due_date - today).days
@@ -100,38 +215,28 @@ def send_rent_reminders():
                 if payment:
                     continue
                 
-                # Send reminder
-                if days_until_due == user.reminder_days_before or (days_until_due < 0 and days_until_due > -user.reminder_days_before):
-                    try:
-                        msg = Message(
-                            subject=f'Rent Due Reminder - {tenant.name}',
-                            recipients=[user.email],
-                            body=f"""Hi {user.first_name or 'Landlord'},
-
-This is a friendly reminder that rent is due for:
-
-Tenant: {tenant.name}
-Property: {tenant.property_address}
-Amount: ${tenant.monthly_rent:.2f}
-Due Date: {due_date.strftime('%B %d, %Y')}
-
-{'Payment is overdue by ' + str(abs(days_until_due)) + ' days.' if days_until_due < 0 else 'Payment is due in ' + str(days_until_due) + ' days.'}
-
-Log in to RentKeepers to record the payment:
-{request.host_url if request else ''}payments
-
----
-RentKeepers - Simple Rent Tracking
-"""
-                        )
-                        mail.send(msg)
-                        print(f"Sent reminder to {user.email} for {tenant.name}")
-                    except Exception as e:
-                        print(f"Failed to send email to {user.email}: {e}")
+                # Send reminder if within the window
+                if days_until_due == user.reminder_days_before:
+                    # Days before due
+                    send_rent_reminder_email(user, tenant, due_date, days_until_due)
+                    log_action(user.id, 'REMINDER_SENT', 'tenant', tenant.id, 
+                              f"Reminder sent {days_until_due} days before due date")
+                    
+                elif days_until_due == 0:
+                    # Due today
+                    send_rent_reminder_email(user, tenant, due_date, 0)
+                    log_action(user.id, 'REMINDER_SENT', 'tenant', tenant.id, "Due today reminder")
+                    
+                elif days_until_due == -3:
+                    # 3 days late
+                    send_rent_reminder_email(user, tenant, due_date, days_until_due)
+                    log_action(user.id, 'REMINDER_SENT', 'tenant', tenant.id, "Late payment reminder")
+                    
     finally:
         db.close()
 
-scheduler.add_job(send_rent_reminders, 'cron', hour=9, minute=0)
+# Schedule reminders to run daily at 9 AM
+scheduler.add_job(check_and_send_reminders, 'cron', hour=9, minute=0)
 scheduler.start()
 
 # Template filters
@@ -142,7 +247,7 @@ def month_name_filter(month_str):
         return datetime(int(year), int(month), 1).strftime('%B %Y')
     return month_str
 
-# === AUTH ROUTES ===
+# ============== AUTH ROUTES ==============
 
 @app.route('/register', methods=['GET', 'POST'])
 @limiter.limit("5 per minute")
@@ -222,7 +327,112 @@ def logout():
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
 
-# === SUBSCRIPTION ROUTES ===
+# ============== TENANT PORTAL ROUTES ==============
+
+@app.route('/portal/<token>')
+def tenant_portal(token):
+    """Tenant-facing portal - no login required, token-based auth"""
+    db = get_db_session()
+    tenant = db.query(Tenant).filter_by(portal_token=token, portal_enabled=True).first()
+    
+    if not tenant:
+        abort(404, "Invalid or expired portal link")
+    
+    # Get payment history
+    payments = db.query(Payment).filter_by(tenant_id=tenant.id).order_by(Payment.payment_date.desc()).all()
+    
+    # Calculate current month status
+    today = date.today()
+    current_month = today.strftime('%Y-%m')
+    current_payment = next((p for p in payments if p.for_month == current_month), None)
+    
+    # Calculate amount due
+    amount_due = tenant.monthly_rent
+    if current_payment:
+        amount_due = max(0, tenant.monthly_rent - current_payment.amount_paid)
+    
+    # Determine status
+    if amount_due == 0:
+        status = 'paid'
+    elif today.day > tenant.due_day:
+        status = 'late'
+    else:
+        status = 'pending'
+    
+    # Calculate next due date
+    due_day = min(tenant.due_day, calendar.monthrange(today.year, today.month)[1])
+    due_date = date(today.year, today.month, due_day)
+    if due_date < today and status != 'paid':
+        # Next month
+        next_month = today.replace(day=1) + timedelta(days=32)
+        next_due_day = min(tenant.due_day, calendar.monthrange(next_month.year, next_month.month)[1])
+        due_date = date(next_month.year, next_month.month, next_due_day)
+    
+    db.close()
+    
+    return render_template('tenant_portal.html',
+                         tenant=tenant,
+                         payments=payments[:12],  # Last 12 payments
+                         status=status,
+                         amount_due=amount_due,
+                         due_date=due_date,
+                         current_month=current_month)
+
+# ============== LANDLORD ROUTES ==============
+
+@app.route('/tenants/<int:tenant_id>/enable-portal', methods=['POST'])
+@login_required
+def enable_tenant_portal(tenant_id):
+    """Generate portal token for tenant"""
+    db = get_db_session()
+    tenant = db.query(Tenant).filter_by(id=tenant_id, user_id=current_user.id).first()
+    
+    if not tenant:
+        flash('Tenant not found.', 'danger')
+        db.close()
+        return redirect(url_for('list_tenants'))
+    
+    if not tenant.email:
+        flash('Tenant needs an email address for portal access.', 'warning')
+        db.close()
+        return redirect(url_for('edit_tenant', tenant_id=tenant_id))
+    
+    # Generate unique token
+    tenant.portal_token = secrets.token_urlsafe(32)
+    tenant.portal_enabled = True
+    db.commit()
+    
+    # Send email to tenant
+    portal_url = url_for('tenant_portal', token=tenant.portal_token, _external=True)
+    
+    if send_tenant_invite(tenant, portal_url):
+        flash(f'Portal access sent to {tenant.email}!', 'success')
+        log_action(current_user.id, 'PORTAL_ENABLED', 'tenant', tenant.id, 
+                  f"Portal enabled for {tenant.name}", request.remote_addr)
+    else:
+        flash(f'Portal enabled but email failed. Share this link: {portal_url}', 'warning')
+    
+    db.close()
+    return redirect(url_for('edit_tenant', tenant_id=tenant_id))
+
+@app.route('/tenants/<int:tenant_id>/disable-portal', methods=['POST'])
+@login_required
+def disable_tenant_portal(tenant_id):
+    """Revoke portal access"""
+    db = get_db_session()
+    tenant = db.query(Tenant).filter_by(id=tenant_id, user_id=current_user.id).first()
+    
+    if tenant:
+        tenant.portal_enabled = False
+        tenant.portal_token = None
+        db.commit()
+        flash(f'Portal access revoked for {tenant.name}.', 'info')
+        log_action(current_user.id, 'PORTAL_DISABLED', 'tenant', tenant.id)
+    
+    db.close()
+    return redirect(url_for('edit_tenant', tenant_id=tenant_id))
+
+# ============== SUBSCRIPTION ROUTES ==============
 
 @app.route('/pricing')
 def pricing():
@@ -268,7 +478,7 @@ def payment_success():
             user = db.query(User).get(current_user.id)
             user.stripe_customer_id = checkout_session.customer
             user.stripe_subscription_id = checkout_session.subscription
-            user.subscription_tier = 'monthly'  # or parse from metadata
+            user.subscription_tier = 'monthly'
             user.subscription_status = 'active'
             db.commit()
             db.close()
@@ -303,7 +513,7 @@ def stripe_webhook():
     
     return jsonify({'status': 'success'}), 200
 
-# === MAIN APP ROUTES ===
+# ============== MAIN APP ROUTES ==============
 
 @app.route('/')
 @login_required
@@ -315,7 +525,6 @@ def dashboard():
     
     tenants = db.query(Tenant).filter_by(user_id=current_user.id).all()
     
-    # Build status for each tenant
     tenant_status = []
     total_expected = 0
     total_collected = 0
@@ -398,7 +607,118 @@ def add_tenant():
     
     return redirect(url_for('list_tenants'))
 
-# === EXPORT/IMPORT ===
+@app.route('/tenants/<int:tenant_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_tenant(tenant_id):
+    db = get_db_session()
+    tenant = db.query(Tenant).filter_by(id=tenant_id, user_id=current_user.id).first()
+    
+    if not tenant:
+        flash('Tenant not found', 'danger')
+        db.close()
+        return redirect(url_for('list_tenants'))
+    
+    if request.method == 'POST':
+        try:
+            tenant.name = request.form['name']
+            tenant.property_address = request.form['property_address']
+            tenant.monthly_rent = float(request.form['monthly_rent'])
+            tenant.due_day = int(request.form['due_day'])
+            tenant.phone = request.form.get('phone', '')
+            tenant.email = request.form.get('email', '')
+            tenant.lease_start = request.form.get('lease_start') or None
+            tenant.lease_end = request.form.get('lease_end') or None
+            tenant.security_deposit = float(request.form.get('security_deposit', 0))
+            db.commit()
+            flash(f'Tenant "{tenant.name}" updated!', 'success')
+            log_action(current_user.id, 'TENANT_UPDATED', 'tenant', tenant.id)
+        except Exception as e:
+            db.rollback()
+            flash(f'Error updating tenant: {str(e)}', 'danger')
+        finally:
+            db.close()
+        return redirect(url_for('list_tenants'))
+    
+    db.close()
+    return render_template('edit_tenant.html', tenant=tenant)
+
+@app.route('/tenants/<int:tenant_id>/delete', methods=['POST'])
+@login_required
+def delete_tenant(tenant_id):
+    db = get_db_session()
+    tenant = db.query(Tenant).filter_by(id=tenant_id, user_id=current_user.id).first()
+    
+    if tenant:
+        name = tenant.name
+        db.delete(tenant)
+        db.commit()
+        flash(f'Tenant "{name}" deleted.', 'warning')
+        log_action(current_user.id, 'TENANT_DELETED', details=f"Deleted: {name}")
+    else:
+        flash('Tenant not found', 'danger')
+    
+    db.close()
+    return redirect(url_for('list_tenants'))
+
+@app.route('/payments')
+@login_required
+def payments():
+    db = get_db_session()
+    tenants = db.query(Tenant).filter_by(user_id=current_user.id).all()
+    
+    payment_history = db.query(Payment).filter_by(user_id=current_user.id).order_by(
+        Payment.payment_date.desc()
+    ).limit(30).all()
+    
+    current_month = date.today().strftime('%Y-%m')
+    
+    db.close()
+    return render_template('payments.html', 
+                         tenants=tenants, 
+                         payment_history=payment_history,
+                         current_month=current_month)
+
+@app.route('/payments/add', methods=['POST'])
+@login_required
+def add_payment():
+    db = get_db_session()
+    
+    tenant_id = int(request.form['tenant_id'])
+    tenant = db.query(Tenant).filter_by(id=tenant_id, user_id=current_user.id).first()
+    
+    if not tenant:
+        flash('Invalid tenant.', 'danger')
+        db.close()
+        return redirect(url_for('payments'))
+    
+    try:
+        payment = Payment(
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            amount_paid=float(request.form['amount_paid']),
+            for_month=request.form['for_month'],
+            payment_method=request.form.get('payment_method', 'Cash'),
+            notes=request.form.get('notes', '')
+        )
+        db.add(payment)
+        db.commit()
+        
+        # Send confirmation email to tenant
+        if tenant.email and tenant.portal_enabled:
+            send_tenant_payment_confirmation(tenant, payment, current_user.first_name or 'Your Landlord')
+        
+        flash('Payment logged successfully!', 'success')
+        log_action(current_user.id, 'PAYMENT_ADDED', 'payment', payment.id,
+                  f"${payment.amount_paid} for {tenant.name}", request.remote_addr)
+    except Exception as e:
+        db.rollback()
+        flash(f'Error logging payment: {str(e)}', 'danger')
+    finally:
+        db.close()
+    
+    return redirect(url_for('payments'))
+
+# ============== EXPORT/IMPORT ==============
 
 @app.route('/export')
 @login_required
@@ -487,6 +807,8 @@ def import_csv():
     
     return redirect(url_for('settings'))
 
+# ============== SETTINGS ==============
+
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
@@ -494,14 +816,12 @@ def settings():
     user = db.query(User).get(current_user.id)
     
     if request.method == 'POST':
-        # Update profile
         user.email = request.form.get('email', user.email)
         user.first_name = request.form.get('first_name', user.first_name)
         user.reminder_enabled = 'reminder_enabled' in request.form
         user.reminder_days_before = int(request.form.get('reminder_days_before', 3))
         user.reminder_time = request.form.get('reminder_time', '09:00')
         
-        # Update password
         new_password = request.form.get('new_password', '')
         if new_password:
             if len(new_password) >= 6:
@@ -534,16 +854,11 @@ def test_email():
         flash('Email not configured.', 'warning')
         return redirect(url_for('settings'))
     
-    try:
-        msg = Message(
-            subject='RentKeepers - Test Email',
-            recipients=[current_user.email],
-            body=f"Hi {current_user.first_name or 'there'},\n\nThis is a test email from RentKeepers.\n\nYour email reminders are working!"
-        )
-        mail.send(msg)
+    if send_email(current_user.email, 'RentKeepers - Test Email',
+                 f"Hi {current_user.first_name or 'there'},\n\nYour email is working!"):
         flash('Test email sent!', 'success')
-    except Exception as e:
-        flash(f'Failed to send test email: {str(e)}', 'danger')
+    else:
+        flash('Failed to send test email.', 'danger')
     
     return redirect(url_for('settings'))
 
