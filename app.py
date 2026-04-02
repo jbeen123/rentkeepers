@@ -466,6 +466,65 @@ def checkout():
         flash(f'Error creating checkout: {str(e)}', 'danger')
         return redirect(url_for('pricing'))
 
+# ============== CRYPTO PAYMENT ROUTES ==============
+
+CRYPTO_WALLETS = {
+    'btc': os.getenv('BTC_WALLET', 'your_btc_address'),
+    'eth': os.getenv('ETH_WALLET', 'your_eth_address'),
+    'usdc': os.getenv('USDC_WALLET', 'your_usdc_address')
+}
+
+CRYPTO_PRICES = {
+    'monthly': {'usd': 9.00, 'btc': 0.00015, 'eth': 0.003, 'usdc': 9.00},
+    'yearly': {'usd': 79.00, 'btc': 0.0013, 'eth': 0.026, 'usdc': 79.00}
+}
+
+@app.route('/payment')
+@login_required
+def payment():
+    tier = request.args.get('tier', 'monthly')
+    price_usd = '$9' if tier == 'monthly' else '$79'
+    
+    return render_template('payment.html',
+                         tier=tier,
+                         price_usd=price_usd,
+                         wallet_btc=CRYPTO_WALLETS['btc'],
+                         wallet_eth=CRYPTO_WALLETS['eth'],
+                         wallet_usdc=CRYPTO_WALLETS['usdc'],
+                         crypto_amount_btc=CRYPTO_PRICES[tier]['btc'],
+                         crypto_amount_eth=CRYPTO_PRICES[tier]['eth'],
+                         crypto_amount_usdc=CRYPTO_PRICES[tier]['usdc'])
+
+@app.route('/payment/crypto', methods=['POST'])
+@login_required
+def crypto_payment_submit():
+    tier = request.form.get('tier', 'monthly')
+    tx_hash = request.form.get('tx_hash', '').strip()
+    currency = request.form.get('currency', 'USDC')
+    
+    if not tx_hash:
+        flash('Please provide transaction hash.', 'danger')
+        return redirect(url_for('payment', tier=tier))
+    
+    db = get_db_session()
+    try:
+        # Create pending payment record
+        user = db.query(User).get(current_user.id)
+        user.pending_crypto_tx = tx_hash
+        user.pending_crypto_amount = CRYPTO_PRICES[tier]['usd']
+        user.pending_crypto_currency = currency
+        db.commit()
+        
+        flash('Payment submitted! We\'ll activate your account once confirmed.', 'success')
+        log_action(current_user.id, 'CRYPTO_PAYMENT_SUBMITTED', 
+                  details=f'Tier: {tier}, Amount: ${CRYPTO_PRICES[tier]["usd"]}, TX: {tx_hash}')
+    except Exception as e:
+        flash(f'Error recording payment: {str(e)}', 'danger')
+    finally:
+        db.close()
+    
+    return redirect(url_for('dashboard'))
+
 @app.route('/payment-success')
 @login_required
 def payment_success():
@@ -564,20 +623,23 @@ def dashboard():
 def list_tenants():
     db = get_db_session()
     tenants = db.query(Tenant).filter_by(user_id=current_user.id).all()
+    tenant_count = db.query(Tenant).filter_by(user_id=current_user.id).count()
+    can_add = tenant_count < current_user.max_tenants
     db.close()
-    
-    can_add = current_user.can_add_tenant
     
     return render_template('tenants.html', tenants=tenants, can_add=can_add)
 
 @app.route('/tenants/add', methods=['POST'])
 @login_required
 def add_tenant():
-    if not current_user.can_add_tenant:
+    db = get_db_session()
+    
+    # Check tenant limit with open session
+    tenant_count = db.query(Tenant).filter_by(user_id=current_user.id).count()
+    if tenant_count >= current_user.max_tenants:
+        db.close()
         flash('Upgrade to Premium for unlimited tenants!', 'warning')
         return redirect(url_for('pricing'))
-    
-    db = get_db_session()
     
     try:
         tenant = Tenant(
@@ -780,8 +842,10 @@ def import_csv():
         db = get_db_session()
         imported = 0
         
+        tenant_count = db.query(Tenant).filter_by(user_id=current_user.id).count()
+        
         for row in reader:
-            if not current_user.can_add_tenant:
+            if tenant_count >= current_user.max_tenants:
                 flash(f'Imported {imported} tenants. Upgrade for more!', 'warning')
                 break
             

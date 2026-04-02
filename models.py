@@ -38,6 +38,11 @@ class User(Base):
     stripe_customer_id = Column(String(100), nullable=True)
     stripe_subscription_id = Column(String(100), nullable=True)
     
+    # Crypto payment tracking
+    pending_crypto_tx = Column(String(100), nullable=True)
+    pending_crypto_amount = Column(Float, nullable=True)
+    pending_crypto_currency = Column(String(10), nullable=True)
+    
     # Email reminder settings
     reminder_enabled = Column(Boolean, default=False)
     reminder_days_before = Column(Integer, default=3)
@@ -132,7 +137,7 @@ class Property(Base):
     
     # Relationships
     user = relationship("User", back_populates="properties")
-    tenants = relationship("Tenant", back_populates="property")
+    tenants = relationship("Tenant", back_populates="property_rel")
     
     @property
     def occupancy_rate(self):
@@ -182,7 +187,7 @@ class Tenant(Base):
     
     # Relationships
     user = relationship("User", back_populates="tenants")
-    property = relationship("Property", back_populates="tenants")
+    property_rel = relationship("Property", back_populates="tenants")
     payments = relationship("Payment", back_populates="tenant", cascade="all, delete-orphan")
     
     @property
@@ -251,7 +256,7 @@ class MaintenanceRequest(Base):
     completed_at = Column(DateTime, nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class AuditLog(Base):
     __tablename__ = 'audit_logs'

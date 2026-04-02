@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Payment - RentKeepers{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 text-center mb-4">
+        <h2>Complete Your Upgrade</h2>
+        <p class="text-muted">Choose your payment method</p>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <!-- USD / Card Payment -->
+    <div class="col-md-5 mb-4">
+        <div class="card h-100">
+            <div class="card-header text-center">
+                <h4>💳 Card / USD</h4>
+            </div>
+            <div class="card-body text-center">
+                <div class="display-6 mb-3">${{ price_usd }}</div>
+                <ul class="list-unstyled text-start mb-4">
+                    <li>✅ Instant activation</li>
+                    <li>✅ Secure checkout</li>
+                    <li>✅ Automatic receipt</li>
+                </ul>
+                
+                <form action="{{ url_for('checkout') }}" method="POST">
+                    <input type="hidden" name="tier" value="{{ tier }}">
+                    <button type="submit" class="btn btn-primary w-100">
+                        Pay with Card
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Crypto Payment -->
+    <div class="col-md-5 mb-4">
+        <div class="card h-100 border-warning">
+            <div class="card-header text-center bg-warning text-dark">
+                <h4>₿ Crypto</h4>
+            </div>
+            <div class="card-body text-center">
+                <div class="display-6 mb-3">
+                    {% if tier == 'monthly' %}
+                        $9.00
+                    {% else %}
+                        $79.00
+                    {% endif %}
+                </div>
+                <p class="text-muted">Pay with BTC, ETH, or USDC</p>
+                
+                <div class="mb-3">
+                    <select class="form-select" id="crypto-select">
+                        <option value="btc">Bitcoin (BTC)</option>
+                        <option value="eth">Ethereum (ETH)</option>
+                        <option value="usdc" selected>USDC (Stable)</option>
+                    </select>
+                </div>
+                
+                <div id="crypto-address" class="mb-3 p-3 bg-light rounded">
+                    <div class="text-monospace small mb-2"><strong>Send to:</strong></div>
+                    <div id="address-text" class="text-break small">
+                        {{ wallet_usdc }}
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary mt-2" onclick="copyAddress()">
+                        Copy Address
+                    </button>
+                </div>
+                
+                <div class="alert alert-info small">
+                    <strong>Amount:</strong> <span id="crypto-amount">{{ crypto_amount_usdc }} USDC</span><br>
+                    <strong>Network:</strong> Ethereum (ERC-20)
+                </div>
+                
+                <form action="{{ url_for('crypto_payment_submit') }}" method="POST">
+                    <input type="hidden" name="tier" value="{{ tier }}">
+                    <input type="hidden" name="amount" value="{{ crypto_amount_usdc }}">
+                    <input type="hidden" name="currency" value="USDC">
+                    <div class="mb-3">
+                        <input type="text" name="tx_hash" class="form-control" 
+                               placeholder="Transaction Hash / TxID" required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-warning w-100 text-dark">
+                        I've Sent Payment
+                    </button>
+                </form>
+                
+                <p class="text-muted small mt-3">
+                    Account activated after payment confirmed.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyAddress() {
+    const address = document.getElementById('address-text').innerText;
+    navigator.clipboard.writeText(address).then(() => {
+        alert('Address copied!');
+    });
+}
+
+document.getElementById('crypto-select').addEventListener('change', function() {
+    const currency = this.value;
+    const addressDiv = document.getElementById('address-text');
+    const amountSpan = document.getElementById('crypto-amount');
+    
+    const addresses = {
+        'btc': '{{ wallet_btc }}',
+        'eth': '{{ wallet_eth }}',
+        'usdc': '{{ wallet_usdc }}'
+    };
+    
+    const amounts = {
+        'btc': '{{ crypto_amount_btc }} BTC',
+        'eth': '{{ crypto_amount_eth }} ETH', 
+        'usdc': '{{ crypto_amount_usdc }} USDC'
+    };
+    
+    addressDiv.innerText = addresses[currency] || 'Contact support';
+    amountSpan.innerText = amounts[currency] || 'Contact support';
+});
+</script>
+{% endblock %}
