@@ -1,0 +1,43 @@
+# Railway ignore file (what NOT to upload)
+
+# Environment
+.env
+.env.local
+.env.development
+*.db
+*.sqlite
+*.sqlite3
+
+# Development
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Documentation
+README.md
+ENV_SETUP.md
+deploy-railway.sh
+
+# Local only
+venv/
+env/
+ENV/
