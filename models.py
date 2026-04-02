@@ -51,21 +51,33 @@ class User(Base):
         return 3  # Free tier
     
     @property
+    def max_properties(self):
+        if self.subscription_tier in ['monthly', 'yearly', 'lifetime']:
+            return 999  # Unlimited
+        return 1  # Free tier: 1 property
+    
+    @property
     def can_add_tenant(self):
         return len(self.tenants) < self.max_tenants
     
     @property
+    def can_add_property(self):
+        return len(self.properties) < self.max_properties
+    
+    @property
     def subscription_display(self):
         tier_map = {
-            'free': 'Free (3 tenants)',
+            'free': 'Free (3 tenants, 1 property)',
             'monthly': 'Premium Monthly',
             'yearly': 'Premium Yearly',
             'lifetime': 'Lifetime Access'
         }
         return tier_map.get(self.subscription_tier, 'Free')
     
+    # Relationships
     tenants = relationship("Tenant", back_populates="user", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
+    properties = relationship("Property", back_populates="user", cascade="all, delete-orphan")
     
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -85,31 +97,92 @@ class User(Base):
     def get_id(self):
         return str(self.id)
 
+class Property(Base):
+    """Multi-property support - landlords can have multiple properties"""
+    __tablename__ = 'properties'
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    name = Column(String(100), nullable=False)  # e.g., "Oak Street Duplex"
+    address = Column(String(255), nullable=False)  # Full address
+    city = Column(String(100))
+    state = Column(String(50))
+    zip_code = Column(String(20))
+    
+    # Property details
+    property_type = Column(String(50))  # single_family, duplex, apartment, commercial
+    bedrooms = Column(Float, nullable=True)
+    bathrooms = Column(Float, nullable=True)
+    square_footage = Column(Integer, nullable=True)
+    year_built = Column(Integer, nullable=True)
+    
+    # Financial
+    purchase_price = Column(Float, nullable=True)
+    purchase_date = Column(Date, nullable=True)
+    current_value = Column(Float, nullable=True)
+    property_tax = Column(Float, nullable=True)
+    insurance_cost = Column(Float, nullable=True)
+    maintenance_budget = Column(Float, nullable=True)
+    
+    # Status
+    status = Column(String(20), default='active')  # active, sold, archived
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", back_populates="properties")
+    tenants = relationship("Tenant", back_populates="property")
+    
+    @property
+    def occupancy_rate(self):
+        """Calculate current occupancy rate"""
+        total_units = len(self.tenants) if self.property_type != 'single_family' else 1
+        occupied = sum(1 for t in self.tenants if t.is_active)
+        return (occupied / total_units * 100) if total_units > 0 else 0
+    
+    @property
+    def monthly_income(self):
+        """Total monthly rental income from this property"""
+        return sum(t.monthly_rent for t in self.tenants)
+    
+    @property
+    def annual_income(self):
+        """Total annual rental income"""
+        return self.monthly_income * 12
+
 class Tenant(Base):
     __tablename__ = 'tenants'
     
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    property_id = Column(Integer, ForeignKey('properties.id'), nullable=True)  # Optional property assignment
     name = Column(String(100), nullable=False)
-    property_address = Column(String(255), nullable=False)
+    property_address = Column(String(255), nullable=False)  # Legacy, use property_id instead
     monthly_rent = Column(Float, nullable=False)
-    due_day = Column(Integer, nullable=False)  # Day of month (1-31)
+    due_day = Column(Integer, nullable=False)
     phone = Column(String(20))
     email = Column(String(120))
     
-    # Property details
+    # Lease details
     lease_start = Column(Date, nullable=True)
     lease_end = Column(Date, nullable=True)
     security_deposit = Column(Float, default=0.0)
     
-    # Tenant portal access (for future feature)
+    # Tenant portal
     portal_enabled = Column(Boolean, default=False)
-    portal_token = Column(String(64), nullable=True)  # For magic link login
+    portal_token = Column(String(64), nullable=True)
+    
+    # Status
+    is_active = Column(Boolean, default=True)  # False = former tenant
+    moved_out_date = Column(Date, nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
+    # Relationships
     user = relationship("User", back_populates="tenants")
+    property = relationship("Property", back_populates="tenants")
     payments = relationship("Payment", back_populates="tenant", cascade="all, delete-orphan")
     
     @property
@@ -120,9 +193,6 @@ class Tenant(Base):
     @property
     def is_paid_current(self):
         return self.total_paid_this_month >= self.monthly_rent
-    
-    def __repr__(self):
-        return f"<Tenant(name='{self.name}', property='{self.property_address}')>"
 
 class Payment(Base):
     __tablename__ = 'payments'
@@ -131,9 +201,9 @@ class Payment(Base):
     tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     amount_paid = Column(Float, nullable=False)
-    for_month = Column(String(7), nullable=False)  # Format: "2026-03"
+    for_month = Column(String(7), nullable=False)
     payment_date = Column(DateTime, default=datetime.utcnow)
-    payment_method = Column(String(20))  # Venmo, Zelle, Check, Cash, ACH, Stripe
+    payment_method = Column(String(20))
     notes = Column(String(255))
     
     # Stripe integration
@@ -141,12 +211,9 @@ class Payment(Base):
     
     tenant = relationship("Tenant", back_populates="payments")
     user = relationship("User", back_populates="payments")
-    
-    def __repr__(self):
-        return f"<Payment(${self.amount_paid} for {self.for_month})>"
 
 class Invoice(Base):
-    """For generated invoices sent to tenants"""
+    """Generated invoices for tenants"""
     __tablename__ = 'invoices'
     
     id = Column(Integer, primary_key=True)
@@ -157,24 +224,42 @@ class Invoice(Base):
     for_month = Column(String(7), nullable=False)
     due_date = Column(Date, nullable=False)
     
-    status = Column(String(20), default='pending')  # pending, paid, overdue, cancelled
+    status = Column(String(20), default='pending')
     sent_at = Column(DateTime, nullable=True)
     paid_at = Column(DateTime, nullable=True)
-    
-    # PDF storage (URL to stored file)
     pdf_url = Column(String(500), nullable=True)
     
     tenant = relationship("Tenant")
     user = relationship("User")
 
+class MaintenanceRequest(Base):
+    """Track maintenance issues per property"""
+    __tablename__ = 'maintenance_requests'
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    property_id = Column(Integer, ForeignKey('properties.id'), nullable=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=True)
+    
+    title = Column(String(200), nullable=False)
+    description = Column(Text)
+    priority = Column(String(20), default='medium')  # low, medium, high, emergency
+    status = Column(String(20), default='open')  # open, in_progress, completed, cancelled
+    
+    estimated_cost = Column(Float, nullable=True)
+    actual_cost = Column(Float, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class AuditLog(Base):
-    """Track important actions for compliance"""
     __tablename__ = 'audit_logs'
     
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
-    action = Column(String(50), nullable=False)  # LOGIN, LOGOUT, PAYMENT_ADDED, etc.
-    resource_type = Column(String(50))  # tenant, payment, etc.
+    action = Column(String(50), nullable=False)
+    resource_type = Column(String(50))
     resource_id = Column(Integer)
     details = Column(Text)
     ip_address = Column(String(45))
