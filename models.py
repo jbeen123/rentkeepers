@@ -48,6 +48,11 @@ class User(Base):
     reminder_days_before = Column(Integer, default=3)
     reminder_time = Column(String(5), default="09:00")
     
+    # 2FA TOTP settings
+    totp_secret = Column(String(32), nullable=True)  # Encrypted TOTP secret
+    totp_enabled = Column(Boolean, default=False)  # 2FA enabled flag
+    totp_verified_at = Column(DateTime, nullable=True)  # When 2FA was last verified
+    
     # Tenant limits
     @property
     def max_tenants(self):
@@ -101,6 +106,31 @@ class User(Base):
     
     def get_id(self):
         return str(self.id)
+    
+    def generate_totp_secret(self):
+        """Generate a new TOTP secret"""
+        import pyotp
+        self.totp_secret = pyotp.random_base32()
+        return self.totp_secret
+    
+    def verify_totp(self, token):
+        """Verify a TOTP token"""
+        import pyotp
+        if not self.totp_secret or not self.totp_enabled:
+            return True
+        totp = pyotp.TOTP(self.totp_secret)
+        return totp.verify(token, valid_window=1)
+    
+    def get_totp_uri(self):
+        """Get provisioning URI for QR code"""
+        import pyotp
+        if not self.totp_secret:
+            return None
+        totp = pyotp.TOTP(self.totp_secret)
+        return totp.provisioning_uri(
+            name=self.email,
+            issuer_name="RentKeepers"
+        )
 
 class Property(Base):
     """Multi-property support - landlords can have multiple properties"""

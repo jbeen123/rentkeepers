@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Properties - RentKeepers{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Add Property Form -->
+    <div class="col-lg-4 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-building me-2"></i>Add New Property
+            </div>
+            <div class="card-body">
+                {% if property_count >= max_properties %}
+                    <div class="alert alert-warning">
+                        <i class="bi bi-lock me-2"></i>
+                        You've reached your property limit ({{ max_properties }}).
+                        <br>
+                        <a href="{{ url_for('pricing') }}" class="btn btn-sm btn-primary mt-2">
+                            <i class="bi bi-star me-1"></i>Upgrade to Premium
+                        </a>
+                    </div>
+                {% else %}
+                    <a href="{{ url_for('add_property') }}" class="btn btn-primary w-100">
+                        <i class="bi bi-plus-circle me-2"></i>Add Property
+                    </a>
+                {% endif %}
+                
+                <div class="mt-3 text-muted small">
+                    <i class="bi bi-info-circle me-1"></i>
+                    {% if current_user.subscription_tier == 'free' %}
+                        Free tier: {{ property_count }} / {{ max_properties }} properties
+                    {% else %}
+                        Premium: Unlimited properties
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Property List -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-buildings me-2"></i>My Properties
+                <span class="badge bg-secondary ms-2">{{ properties | length }}</span>
+            </div>
+            <div class="card-body p-0">
+                {% if properties %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Property</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for property in properties %}
+                            <tr>
+                                <td>
+                                    <strong>{{ property.name }}</strong>
+                                    <br><small class="text-muted">{{ property.address }}</small>
+                                    {% if property.city and property.state %}
+                                        <br><small class="text-muted">{{ property.city }}, {{ property.state }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark">
+                                        {{ property.property_type | replace('_', ' ') | title }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if property.status == 'active' %}
+                                        <span class="badge bg-success">Active</span>
+                                    {% elif property.status == 'sold' %}
+                                        <span class="badge bg-secondary">Sold</span>
+                                    {% else %}
+                                        <span class="badge bg-warning">Archived</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('edit_property', property_id=property.id) }}" 
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-pencil"></i>Edit
+                                    </a>
+                                    <form action="{{ url_for('delete_property', property_id=property.id) }}" 
+                                          method="POST" class="d-inline" 
+                                          onsubmit="return confirm('Delete this property?');">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                            <i class="bi bi-trash"></i>Delete
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center p-4">
+                    <i class="bi bi-building-slash display-4 text-muted"></i>
+                    <p class="text-muted mt-2">No properties yet.</p>
+                    <a href="{{ url_for('add_property') }}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle me-2"></i>Add Your First Property
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

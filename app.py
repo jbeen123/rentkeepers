@@ -4,7 +4,7 @@ from flask_mail import Mail, Message
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from apscheduler.schedulers.background import BackgroundScheduler
-from models import init_db, get_db_session, User, Tenant, Payment, Invoice, AuditLog, log_action
+from models import init_db, get_db_session, User, Tenant, Payment, Invoice, AuditLog, Property, log_action
 from datetime import datetime, date, timedelta
 from functools import wraps
 import calendar
@@ -309,6 +309,13 @@ def login():
         db.close()
         
         if user and user.check_password(password):
+            # Check if 2FA is enabled
+            if user.totp_enabled:
+                # Store user ID in session for 2FA verification
+                session['2fa_user_id'] = user.id
+                session['2fa_remember'] = remember
+                return redirect(url_for('verify_2fa'))
+            
             login_user(user, remember=remember)
             log_action(user.id, 'LOGIN', ip_address=request.remote_addr)
             next_page = request.args.get('next')
@@ -326,6 +333,112 @@ def logout():
     logout_user()
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
+
+# ============== 2FA ROUTES ==============
+
+@app.route('/verify-2fa', methods=['GET', 'POST'])
+def verify_2fa():
+    """Verify TOTP code during login"""
+    user_id = session.get('2fa_user_id')
+    if not user_id:
+        return redirect(url_for('login'))
+    
+    if request.method == 'POST':
+        token = request.form.get('token', '').replace(' ', '')
+        
+        db = get_db_session()
+        user = db.query(User).get(user_id)
+        
+        if user and user.verify_totp(token):
+            # Clear 2FA session
+            remember = session.pop('2fa_remember', False)
+            session.pop('2fa_user_id', None)
+            
+            login_user(user, remember=remember)
+            user.totp_verified_at = datetime.utcnow()
+            db.commit()
+            db.close()
+            
+            log_action(user.id, 'LOGIN_2FA', ip_address=request.remote_addr)
+            flash('Welcome back! 2FA verified.', 'success')
+            return redirect(url_for('dashboard'))
+        else:
+            db.close()
+            flash('Invalid verification code. Please try again.', 'danger')
+    
+    return render_template('verify_2fa.html')
+
+@app.route('/setup-2fa', methods=['GET', 'POST'])
+@login_required
+def setup_2fa():
+    """Set up TOTP 2FA"""
+    db = get_db_session()
+    user = db.query(User).get(current_user.id)
+    
+    if request.method == 'POST':
+        token = request.form.get('token', '').replace(' ', '')
+        
+        # Verify the token
+        if user.verify_totp(token):
+            user.totp_enabled = True
+            user.totp_verified_at = datetime.utcnow()
+            db.commit()
+            db.close()
+            
+            log_action(user.id, '2FA_ENABLED', ip_address=request.remote_addr)
+            flash('Two-factor authentication has been enabled!', 'success')
+            return redirect(url_for('settings'))
+        else:
+            db.close()
+            flash('Invalid verification code. Please try again.', 'danger')
+            return redirect(url_for('setup_2fa'))
+    
+    # Generate new secret if not exists
+    if not user.totp_secret:
+        user.generate_totp_secret()
+        db.commit()
+    
+    # Generate QR code
+    import qrcode
+    import qrcode.image.svg
+    import io
+    import base64
+    
+    totp_uri = user.get_totp_uri()
+    qr = qrcode.make(totp_uri, image_factory=qrcode.image.svg.SvgImage)
+    buffer = io.BytesIO()
+    qr.save(buffer)
+    qr_b64 = base64.b64encode(buffer.getvalue()).decode()
+    
+    db.close()
+    
+    return render_template('setup_2fa.html', 
+                          secret=user.totp_secret,
+                          qr_code=qr_b64)
+
+@app.route('/disable-2fa', methods=['POST'])
+@login_required
+def disable_2fa():
+    """Disable TOTP 2FA"""
+    db = get_db_session()
+    user = db.query(User).get(current_user.id)
+    
+    password = request.form.get('password', '')
+    
+    if not user.check_password(password):
+        db.close()
+        flash('Incorrect password.', 'danger')
+        return redirect(url_for('settings'))
+    
+    user.totp_enabled = False
+    user.totp_secret = None
+    user.totp_verified_at = None
+    db.commit()
+    db.close()
+    
+    log_action(user.id, '2FA_DISABLED', ip_address=request.remote_addr)
+    flash('Two-factor authentication has been disabled.', 'info')
+    return redirect(url_for('settings'))
 
 # ============== TENANT PORTAL ROUTES ==============
 
@@ -453,13 +566,24 @@ def checkout():
     price_id = STRIPE_PRICE_MONTHLY if tier == 'monthly' else STRIPE_PRICE_YEARLY
     
     try:
+        # Build metadata from env vars + user info
+        checkout_metadata = {
+            'user_id': current_user.id,
+            'app': os.getenv('STRIPE_METADATA_APP', 'rentkeepers'),
+            'version': os.getenv('STRIPE_METADATA_VERSION', '1.0'),
+            'tier': tier
+        }
+        
         checkout_session = stripe.checkout.Session.create(
             customer_email=current_user.email,
             line_items=[{"price": price_id, "quantity": 1}],
             mode='subscription',
             success_url=url_for('payment_success', _external=True) + '?session_id={CHECKOUT_SESSION_ID}',
             cancel_url=url_for('pricing', _external=True),
-            metadata={'user_id': current_user.id}
+            metadata=checkout_metadata,
+            subscription_data={
+                'metadata': checkout_metadata
+            }
         )
         return redirect(checkout_session.url)
     except Exception as e:
@@ -722,13 +846,140 @@ def delete_tenant(tenant_id):
     db.close()
     return redirect(url_for('list_tenants'))
 
+# Property Management Routes
+@app.route('/properties')
+@login_required
+def list_properties():
+    db = get_db_session()
+    properties = db.query(Property).filter_by(user_id=current_user.id).all()
+    
+    # Pre-calculate values to avoid session issues in template
+    property_count = len(properties)
+    max_properties = current_user.max_properties
+    
+    db.close()
+    return render_template('properties.html', 
+                         properties=properties,
+                         property_count=property_count,
+                         max_properties=max_properties)
+
+@app.route('/properties/add', methods=['GET', 'POST'])
+@login_required
+def add_property():
+    db = get_db_session()
+    
+    # Check property limit for free tier
+    property_count = db.query(Property).filter_by(user_id=current_user.id).count()
+    if property_count >= current_user.max_properties:
+        db.close()
+        flash('Upgrade to Premium for unlimited properties!', 'warning')
+        return redirect(url_for('pricing'))
+    
+    if request.method == 'POST':
+        try:
+            property = Property(
+                user_id=current_user.id,
+                name=request.form['name'],
+                address=request.form['address'],
+                city=request.form.get('city', ''),
+                state=request.form.get('state', ''),
+                zip_code=request.form.get('zip_code', ''),
+                property_type=request.form.get('property_type', 'single_family'),
+                bedrooms=float(request.form.get('bedrooms', 0)) if request.form.get('bedrooms') else None,
+                bathrooms=float(request.form.get('bathrooms', 0)) if request.form.get('bathrooms') else None,
+                square_footage=int(request.form.get('square_footage', 0)) if request.form.get('square_footage') else None,
+                year_built=int(request.form.get('year_built', 0)) if request.form.get('year_built') else None,
+                purchase_price=float(request.form.get('purchase_price', 0)) if request.form.get('purchase_price') else None,
+                property_tax=float(request.form.get('property_tax', 0)) if request.form.get('property_tax') else None,
+                insurance_cost=float(request.form.get('insurance_cost', 0)) if request.form.get('insurance_cost') else None,
+                maintenance_budget=float(request.form.get('maintenance_budget', 0)) if request.form.get('maintenance_budget') else None
+            )
+            db.add(property)
+            db.commit()
+            
+            log_action(current_user.id, 'PROPERTY_ADDED', 'property', property.id,
+                      f"Added property: {property.name}", request.remote_addr)
+            
+            flash(f'Property "{property.name}" added successfully!', 'success')
+            db.close()
+            return redirect(url_for('list_properties'))
+        except Exception as e:
+            db.rollback()
+            flash(f'Error adding property: {str(e)}', 'danger')
+    
+    db.close()
+    return render_template('add_property.html')
+
+@app.route('/properties/<int:property_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_property(property_id):
+    db = get_db_session()
+    property = db.query(Property).filter_by(id=property_id, user_id=current_user.id).first()
+    
+    if not property:
+        flash('Property not found', 'danger')
+        db.close()
+        return redirect(url_for('list_properties'))
+    
+    if request.method == 'POST':
+        try:
+            property.name = request.form['name']
+            property.address = request.form['address']
+            property.city = request.form.get('city', '')
+            property.state = request.form.get('state', '')
+            property.zip_code = request.form.get('zip_code', '')
+            property.property_type = request.form.get('property_type', 'single_family')
+            property.bedrooms = float(request.form.get('bedrooms', 0)) if request.form.get('bedrooms') else None
+            property.bathrooms = float(request.form.get('bathrooms', 0)) if request.form.get('bathrooms') else None
+            property.square_footage = int(request.form.get('square_footage', 0)) if request.form.get('square_footage') else None
+            property.year_built = int(request.form.get('year_built', 0)) if request.form.get('year_built') else None
+            property.purchase_price = float(request.form.get('purchase_price', 0)) if request.form.get('purchase_price') else None
+            property.current_value = float(request.form.get('current_value', 0)) if request.form.get('current_value') else None
+            property.property_tax = float(request.form.get('property_tax', 0)) if request.form.get('property_tax') else None
+            property.insurance_cost = float(request.form.get('insurance_cost', 0)) if request.form.get('insurance_cost') else None
+            property.maintenance_budget = float(request.form.get('maintenance_budget', 0)) if request.form.get('maintenance_budget') else None
+            property.status = request.form.get('status', 'active')
+            
+            db.commit()
+            log_action(current_user.id, 'PROPERTY_UPDATED', 'property', property.id,
+                      f"Updated: {property.name}", request.remote_addr)
+            flash(f'Property "{property.name}" updated!', 'success')
+            db.close()
+            return redirect(url_for('list_properties'))
+        except Exception as e:
+            db.rollback()
+            flash(f'Error updating property: {str(e)}', 'danger')
+    
+    db.close()
+    return render_template('edit_property.html', property=property)
+
+@app.route('/properties/<int:property_id>/delete', methods=['POST'])
+@login_required
+def delete_property(property_id):
+    db = get_db_session()
+    property = db.query(Property).filter_by(id=property_id, user_id=current_user.id).first()
+    
+    if property:
+        name = property.name
+        db.delete(property)
+        db.commit()
+        flash(f'Property "{name}" deleted.', 'warning')
+        log_action(current_user.id, 'PROPERTY_DELETED', details=f"Deleted: {name}")
+    else:
+        flash('Property not found', 'danger')
+    
+    db.close()
+    return redirect(url_for('list_properties'))
+
 @app.route('/payments')
 @login_required
 def payments():
     db = get_db_session()
     tenants = db.query(Tenant).filter_by(user_id=current_user.id).all()
     
-    payment_history = db.query(Payment).filter_by(user_id=current_user.id).order_by(
+    payment_history = db.query(Payment, Tenant).join(Tenant).filter(
+        Payment.user_id == current_user.id
+    ).order_by(
         Payment.payment_date.desc()
     ).limit(30).all()
     
@@ -933,6 +1184,6 @@ def rate_limit_handler(e):
 
 if __name__ == '__main__':
     try:
-        app.run(debug=False, host='0.0.0.0', port=5000)
+        app.run(debug=False, host='127.0.0.1', port=5000)
     finally:
         scheduler.shutdown()

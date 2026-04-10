@@ -10,3 +10,5 @@ stripe==7.10.0
 Flask-Limiter==3.5.0
 gunicorn==21.2.0
 requests==2.31.0
+pyotp==2.9.0
+qrcode[pil]==7.4.2

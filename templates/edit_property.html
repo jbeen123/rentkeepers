@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Property - RentKeepers{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-building-gear me-2"></i>Edit Property: {{ property.name }}
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <!-- Basic Info -->
+                    <div class="row">
+                        <div class="col-md-12 mb-3">
+                            <label for="name" class="form-label">Property Name *</label>
+                            <input type="text" class="form-control" id="name" name="name" 
+                                   value="{{ property.name }}" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-12 mb-3">
+                            <label for="address" class="form-label">Street Address *</label>
+                            <input type="text" class="form-control" id="address" name="address" 
+                                   value="{{ property.address }}" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="city" class="form-label">City</label>
+                            <input type="text" class="form-control" id="city" name="city" 
+                                   value="{{ property.city or '' }}">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="state" class="form-label">State</label>
+                            <input type="text" class="form-control" id="state" name="state" 
+                                   value="{{ property.state or '' }}">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="zip_code" class="form-label">ZIP Code</label>
+                            <input type="text" class="form-control" id="zip_code" name="zip_code" 
+                                   value="{{ property.zip_code or '' }}">
+                        </div>
+                    </div>
+                    
+                    <!-- Property Details -->
+                    <hr class="my-4">
+                    <h6 class="text-muted mb-3">Property Details</h6>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="property_type" class="form-label">Property Type</label>
+                            <select class="form-select" id="property_type" name="property_type">
+                                {% set types = ['single_family', 'duplex', 'apartment', 'condo', 'townhouse', 'commercial', 'multi_family'] %}
+                                {% for t in types %}
+                                    <option value="{{ t }}" {% if property.property_type == t %}selected{% endif %}>
+                                        {{ t | replace('_', ' ') | title }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="status" class="form-label">Status</label>
+                            <select class="form-select" id="status" name="status">
+                                <option value="active" {% if property.status == 'active' %}selected{% endif %}>Active</option>
+                                <option value="sold" {% if property.status == 'sold' %}selected{% endif %}>Sold</option>
+                                <option value="archived" {% if property.status == 'archived' %}selected{% endif %}>Archived</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <label for="bedrooms" class="form-label">Bedrooms</label>
+                            <input type="number" step="0.5" class="form-control" id="bedrooms" name="bedrooms"
+                                   value="{{ property.bedrooms or '' }}">
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="bathrooms" class="form-label">Bathrooms</label>
+                            <input type="number" step="0.5" class="form-control" id="bathrooms" name="bathrooms"
+                                   value="{{ property.bathrooms or '' }}">
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="square_footage" class="form-label">Sq Ft</label>
+                            <input type="number" class="form-control" id="square_footage" name="square_footage"
+                                   value="{{ property.square_footage or '' }}">
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="year_built" class="form-label">Year Built</label>
+                            <input type="number" class="form-control" id="year_built" name="year_built"
+                                   value="{{ property.year_built or '' }}">
+                        </div>
+                    </div>
+                    
+                    <!-- Financial Details -->
+                    <hr class="my-4">
+                    <h6 class="text-muted mb-3">Financial Details</h6>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="purchase_price" class="form-label">Purchase Price ($)</label>
+                            <input type="number" step="0.01" class="form-control" id="purchase_price" name="purchase_price"
+                                   value="{{ property.purchase_price or '' }}">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="current_value" class="form-label">Current Value ($)</label>
+                            <input type="number" step="0.01" class="form-control" id="current_value" name="current_value"
+                                   value="{{ property.current_value or '' }}">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="property_tax" class="form-label">Annual Tax ($)</label>
+                            <input type="number" step="0.01" class="form-control" id="property_tax" name="property_tax"
+                                   value="{{ property.property_tax or '' }}">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="insurance_cost" class="form-label">Insurance ($/year)</label>
+                            <input type="number" step="0.01" class="form-control" id="insurance_cost" name="insurance_cost"
+                                   value="{{ property.insurance_cost or '' }}">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="maintenance_budget" class="form-label">Maintenance ($/month)</label>
+                            <input type="number" step="0.01" class="form-control" id="maintenance_budget" name="maintenance_budget"
+                                   value="{{ property.maintenance_budget or '' }}">
+                        </div>
+                    </div>
+                    
+                    <!-- Submit -->
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{{ url_for('list_properties') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left me-2"></i>Back to Properties
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save me-2"></i>Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

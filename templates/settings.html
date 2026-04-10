@@ -95,6 +95,44 @@ MAIL_PASSWORD=your_app_password</pre>
                 <p class="mb-0 small"><strong>Gmail users:</strong> Use an <a href="https://myaccount.google.com/apppasswords" target="_blank">App Password</a> (not your regular password).</p>
             </div>
         </div>
+
+        <!-- 2FA Security -->
+        <div class="card mt-3 {% if user.totp_enabled %}border-success{% endif %}">
+            <div class="card-header {% if user.totp_enabled %}bg-success text-white{% endif %}">
+                <i class="bi bi-shield-lock me-2"></i>Two-Factor Authentication
+                {% if user.totp_enabled %}
+                    <span class="badge bg-light text-success ms-2">Enabled</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if user.totp_enabled %}
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle-fill me-2"></i>
+                        <strong>2FA is enabled</strong><br>
+                        <small class="text-muted">Last verified: {{ user.totp_verified_at.strftime('%Y-%m-%d %H:%M') if user.totp_verified_at else 'Never' }}</small>
+                    </div>
+                    <form method="POST" action="{{ url_for('disable_2fa') }}" onsubmit="return confirm('Are you sure you want to disable 2FA? This makes your account less secure.');">
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Enter password to confirm</label>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                        </div>
+                        <button type="submit" class="btn btn-outline-danger w-100">
+                            <i class="bi bi-shield-x me-2"></i>Disable 2FA
+                        </button>
+                    </form>
+                {% else %}
+                    <p class="text-muted">Add an extra layer of security to your account.</p>
+                    <ul class="small text-muted mb-3">
+                        <li>Requires a code from your phone when logging in</li>
+                        <li>Protects against stolen passwords</li>
+                        <li>Works with Google Authenticator, Authy, etc.</li>
+                    </ul>
+                    <a href="{{ url_for('setup_2fa') }}" class="btn btn-primary w-100">
+                        <i class="bi bi-shield-plus me-2"></i>Enable 2FA
+                    </a>
+                {% endif %}
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
