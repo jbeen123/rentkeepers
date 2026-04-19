@@ -26,7 +26,9 @@ app.secret_key = os.getenv('SECRET_KEY')
 
 # Configure session cookie for cross-origin
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_COOKIE_SECURE'] = True  # HTTPS only cookies
+# Use HTTPS only in production, HTTP in development
+is_development = os.getenv('FLASK_ENV') == 'development' or os.getenv('FLASK_DEBUG') == '1'
+app.config['SESSION_COOKIE_SECURE'] = not is_development  # HTTPS only in production
 
 # Enable CORS for React frontend (includes HTTPS for local dev)
 CORS(app, supports_credentials=True, origins=["http://localhost:5173", "http://127.0.0.1:5173", "https://localhost:5173", "https://127.0.0.1:5173"])
