@@ -1,3 +1,32 @@
-buildCommand: "pip install -r requirements.txt"
-startCommand: "gunicorn app:app"
-pythonVersion: "3.11"
+services:
+  - type: web
+    name: rentkeepers-backend
+    runtime: python
+    pythonVersion: 3.11
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: rentkeepers-db
+          property: connectionString
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: FLASK_ENV
+        value: production
+      - key: FLASK_DEBUG
+        value: "false"
+
+databases:
+  - name: rentkeepers-db
+    databaseName: rentkeepers
+    user: rentkeepers
+    plan: free
