@@ -3,8 +3,11 @@ from flask_login import LoginManager, login_user, logout_user, login_required, c
 from flask_mail import Mail, Message
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
 from models import init_db, get_db_session, User, Tenant, Payment, Invoice, AuditLog, Property, log_action
+from owner_statements import init_owner_statement_routes
+from payment_processing import init_payment_routes
 from datetime import datetime, date, timedelta
 from functools import wraps
 import calendar
@@ -20,6 +23,13 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY')
+
+# Configure session cookie for cross-origin
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = True  # HTTPS only cookies
+
+# Enable CORS for React frontend (includes HTTPS for local dev)
+CORS(app, supports_credentials=True, origins=["http://localhost:5173", "http://127.0.0.1:5173", "https://localhost:5173", "https://127.0.0.1:5173"])
 
 if not app.secret_key:
     raise ValueError("SECRET_KEY must be set in .env file")
@@ -46,6 +56,10 @@ app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD', '')
 app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER', 'rentkeepers@example.com')
 
 mail = Mail(app)
+
+# Initialize Owner Statement routes
+init_owner_statement_routes(app, mail)
+init_payment_routes(app)
 
 # Rate limiting
 limiter = Limiter(
@@ -1177,13 +1191,440 @@ def test_email():
     
     return redirect(url_for('settings'))
 
+# ============== MOBILE API ENDPOINTS ==============
+# JSON endpoints for the React Native mobile app
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    """Login via API"""
+    data = request.get_json()
+    email = data.get('email', '').lower().strip()
+    password = data.get('password', '')
+    totp_code = data.get('totp_code')
+    
+    db = get_db_session()
+    user = db.query(User).filter_by(email=email).first()
+    
+    if not user or not user.check_password(password):
+        db.close()
+        return jsonify({'error': 'Invalid email or password'}), 401
+    
+    if user.totp_enabled:
+        if not totp_code:
+            db.close()
+            return jsonify({'needs_2fa': True}), 200
+        if not user.verify_totp(totp_code):
+            db.close()
+            return jsonify({'error': 'Invalid 2FA code'}), 401
+    
+    login_user(user)
+    log_action(user.id, 'login', 'User logged in via API')
+    db.close()
+    return jsonify({'user': {'id': user.id, 'email': user.email, 'first_name': user.first_name, 'is_admin': user.is_admin, 'totp_enabled': user.totp_enabled}}), 200
+
+@app.route('/api/register', methods=['POST'])
+def api_register():
+    """Register via API"""
+    data = request.get_json()
+    email = data.get('email', '').lower().strip()
+    password = data.get('password', '')
+    first_name = data.get('first_name', '').strip()
+    last_name = data.get('last_name', '').strip()
+    
+    if len(password) < 8:
+        return jsonify({'error': 'Password must be at least 8 characters'}), 400
+    
+    db = get_db_session()
+    if db.query(User).filter_by(email=email).first():
+        db.close()
+        return jsonify({'error': 'Email already registered'}), 400
+    
+    user = User(email=email, first_name=first_name)
+    user.set_password(password)
+    db.add(user)
+    db.commit()
+    login_user(user)
+    log_action(user.id, 'register', 'New user registered via API')
+    db.close()
+    return jsonify({'user': {'id': user.id, 'email': user.email, 'first_name': user.first_name, 'is_admin': user.is_admin, 'totp_enabled': user.totp_enabled}}), 201
+
+@app.route('/api/logout', methods=['POST'])
+@login_required
+def api_logout():
+    """Logout via API"""
+    log_action(current_user.id, 'logout', 'User logged out via API')
+    logout_user()
+    return jsonify({'message': 'Logged out'}), 200
+
+@app.route('/api/user')
+@login_required
+def api_current_user():
+    """Get current user info for mobile app"""
+    db = get_db_session()
+    user = db.query(User).get(current_user.id)
+    
+    tenant_count = db.query(Tenant).filter_by(user_id=user.id).count()
+    property_count = db.query(Property).filter_by(user_id=user.id).count()
+    
+    result = {
+        'id': user.id,
+        'email': user.email,
+        'first_name': user.first_name,
+        'subscription_tier': user.subscription_tier,
+        'subscription_display': user.subscription_display,
+        'totp_enabled': user.totp_enabled,
+        'max_tenants': user.max_tenants,
+        'max_properties': user.max_properties,
+        'tenant_count': tenant_count,
+        'property_count': property_count
+    }
+    
+    db.close()
+    return jsonify(result)
+
+@app.route('/api/dashboard')
+@login_required
+def api_dashboard():
+    """Get dashboard stats for mobile app"""
+    db = get_db_session()
+    
+    today = date.today()
+    current_month = today.strftime('%Y-%m')
+    
+    tenants = db.query(Tenant).filter_by(user_id=current_user.id, is_active=True).all()
+    
+    stats = {
+        'paid': 0,
+        'pending': 0,
+        'late': 0,
+        'outstanding': 0.0,
+        'total_monthly_rent': sum(t.monthly_rent for t in tenants)
+    }
+    
+    tenant_statuses = []
+    
+    for tenant in tenants:
+        # Check if paid for current month
+        payment = db.query(Payment).filter(
+            Payment.tenant_id == tenant.id,
+            Payment.for_month == current_month
+        ).first()
+        
+        due_day = min(tenant.due_day, calendar.monthrange(today.year, today.month)[1])
+        days_until_due = due_day - today.day
+        
+        if payment and payment.amount_paid >= tenant.monthly_rent:
+            status = 'paid'
+            stats['paid'] += 1
+        elif days_until_due < 0:
+            status = 'late'
+            stats['late'] += 1
+            stats['outstanding'] += tenant.monthly_rent
+        else:
+            status = 'pending'
+            stats['pending'] += 1
+            stats['outstanding'] += tenant.monthly_rent
+        
+        tenant_statuses.append({
+            'id': tenant.id,
+            'name': tenant.name,
+            'status': status,
+            'monthly_rent': tenant.monthly_rent,
+            'due_day': tenant.due_day
+        })
+    
+    # Recent payments (last 5) - eager load tenant to avoid detached session
+    from sqlalchemy.orm import joinedload
+    recent_payments = db.query(Payment).options(
+        joinedload(Payment.tenant)
+    ).join(Tenant).filter(
+        Tenant.user_id == current_user.id
+    ).order_by(Payment.payment_date.desc()).limit(5).all()
+    
+    # Build payment data before closing session
+    payment_data = [{
+        'id': p.id,
+        'tenant_name': p.tenant.name if p.tenant else 'Unknown',
+        'amount': p.amount_paid,
+        'date': p.payment_date.isoformat() if p.payment_date else None,
+        'method': p.payment_method
+    } for p in recent_payments]
+    
+    db.close()
+    
+    return jsonify({
+        'stats': stats,
+        'tenants': tenant_statuses,
+        'recent_payments': payment_data
+    })
+
+@app.route('/api/tenants', methods=['GET', 'POST'])
+@login_required
+def api_tenants():
+    """List or create tenants for mobile app"""
+    db = get_db_session()
+    
+    if request.method == 'POST':
+        data = request.get_json()
+        
+        # Check tenant limit
+        tenant_count = db.query(Tenant).filter_by(user_id=current_user.id).count()
+        if tenant_count >= current_user.max_tenants:
+            db.close()
+            return jsonify({'error': 'Tenant limit reached. Upgrade for more.'}), 403
+        
+        tenant = Tenant(
+            user_id=current_user.id,
+            name=data.get('name'),
+            property_address=data.get('property_address', ''),
+            monthly_rent=float(data.get('monthly_rent', 0)),
+            due_day=int(data.get('due_day', 1)),
+            phone=data.get('phone', ''),
+            email=data.get('email', '')
+        )
+        
+        try:
+            db.add(tenant)
+            db.commit()
+            tenant_id = tenant.id
+            db.close()
+            
+            log_action(current_user.id, 'TENANT_ADDED', 'tenant', tenant_id,
+                      f"Added {tenant.name} via mobile API", request.remote_addr)
+            
+            return jsonify({
+                'id': tenant_id,
+                'message': 'Tenant added successfully'
+            }), 201
+        except Exception as e:
+            db.rollback()
+            db.close()
+            return jsonify({'error': str(e)}), 500
+    
+    # GET - List tenants
+    tenants = db.query(Tenant).filter_by(user_id=current_user.id).all()
+    db.close()
+    
+    return jsonify([{
+        'id': t.id,
+        'name': t.name,
+        'property_address': t.property_address,
+        'monthly_rent': t.monthly_rent,
+        'due_day': t.due_day,
+        'phone': t.phone,
+        'email': t.email,
+        'is_active': t.is_active,
+        'portal_enabled': t.portal_enabled
+    } for t in tenants])
+
+@app.route('/api/tenants/<int:tenant_id>')
+@login_required
+def api_tenant_detail(tenant_id):
+    """Get single tenant with payment history"""
+    db = get_db_session()
+    
+    tenant = db.query(Tenant).filter_by(id=tenant_id, user_id=current_user.id).first()
+    if not tenant:
+        db.close()
+        return jsonify({'error': 'Tenant not found'}), 404
+    
+    payments = db.query(Payment).filter_by(tenant_id=tenant.id).order_by(Payment.payment_date.desc()).all()
+    
+    result = {
+        'id': tenant.id,
+        'name': tenant.name,
+        'property_address': tenant.property_address,
+        'monthly_rent': tenant.monthly_rent,
+        'due_day': tenant.due_day,
+        'phone': tenant.phone,
+        'email': tenant.email,
+        'is_active': tenant.is_active,
+        'portal_enabled': tenant.portal_enabled,
+        'payments': [{
+            'id': p.id,
+            'amount': p.amount_paid,
+            'for_month': p.for_month,
+            'date': p.payment_date.isoformat(),
+            'method': p.payment_method,
+            'notes': p.notes
+        } for p in payments]
+    }
+    
+    db.close()
+    return jsonify(result)
+
+@app.route('/api/payments', methods=['POST'])
+@login_required
+def api_add_payment():
+    """Log a payment via mobile API"""
+    data = request.get_json()
+    
+    db = get_db_session()
+    
+    tenant = db.query(Tenant).filter_by(
+        id=data.get('tenant_id'),
+        user_id=current_user.id
+    ).first()
+    
+    if not tenant:
+        db.close()
+        return jsonify({'error': 'Tenant not found'}), 404
+    
+    try:
+        payment = Payment(
+            tenant_id=tenant.id,
+            user_id=current_user.id,
+            amount_paid=float(data.get('amount_paid', 0)),
+            for_month=data.get('for_month', date.today().strftime('%Y-%m')),
+            payment_method=data.get('payment_method', 'Other'),
+            notes=data.get('notes', '')
+        )
+        
+        db.add(payment)
+        db.commit()
+        payment_id = payment.id
+        db.close()
+        
+        log_action(current_user.id, 'PAYMENT_ADDED', 'payment', payment_id,
+                  f"${payment.amount_paid} via mobile API", request.remote_addr)
+        
+        return jsonify({
+            'id': payment_id,
+            'message': 'Payment logged successfully'
+        }), 201
+    except Exception as e:
+        db.rollback()
+        db.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/properties')
+@login_required
+def api_properties():
+    """List properties for mobile app"""
+    db = get_db_session()
+    properties = db.query(Property).filter_by(user_id=current_user.id).all()
+    db.close()
+    
+    return jsonify([{
+        'id': p.id,
+        'name': p.name,
+        'address': p.address,
+        'status': p.status,
+        'monthly_income': p.monthly_income,
+        'occupancy_rate': p.occupancy_rate
+    } for p in properties])
+
+
+# ============== ADMIN ROUTES ==============
+
+def admin_required(f):
+    """Decorator to require admin access"""
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or not current_user.is_admin:
+            flash('Admin access required.', 'danger')
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/admin')
+@login_required
+@admin_required
+def admin_dashboard():
+    """Admin dashboard"""
+    db = get_db_session()
+    
+    stats = {
+        'total_users': db.query(User).count(),
+        'total_tenants': db.query(Tenant).count(),
+        'total_payments': db.query(Payment).count(),
+        'total_properties': db.query(Property).count(),
+        'paid_users': db.query(User).filter(User.subscription_tier != 'free').count(),
+        'free_users': db.query(User).filter_by(subscription_tier='free').count()
+    }
+    
+    # Recent users
+    recent_users = db.query(User).order_by(User.created_at.desc()).limit(10).all()
+    
+    db.close()
+    
+    return render_template('admin_dashboard.html', stats=stats, users=recent_users)
+
+@app.route('/admin/users')
+@login_required
+@admin_required
+def admin_users():
+    """List all users"""
+    db = get_db_session()
+    users = db.query(User).order_by(User.created_at.desc()).all()
+    db.close()
+    return render_template('admin_users.html', users=users)
+
+@app.route('/admin/user/<int:user_id>/toggle-admin', methods=['POST'])
+@login_required
+@admin_required
+def admin_toggle_admin(user_id):
+    """Toggle admin status for a user"""
+    db = get_db_session()
+    user = db.query(User).get(user_id)
+    
+    if user:
+        if user.id == current_user.id:
+            flash('Cannot remove admin from yourself.', 'danger')
+        else:
+            user.is_admin = not user.is_admin
+            db.commit()
+            flash(f"Admin status {'granted' if user.is_admin else 'removed'} for {user.email}", 'success')
+    
+    db.close()
+    return redirect(url_for('admin_users'))
+
+@app.route('/admin/user/<int:user_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def admin_delete_user(user_id):
+    """Delete a user"""
+    db = get_db_session()
+    user = db.query(User).get(user_id)
+    
+    if user:
+        if user.id == current_user.id:
+            flash('Cannot delete yourself.', 'danger')
+        else:
+            db.delete(user)
+            db.commit()
+            flash(f'User {user.email} deleted.', 'success')
+    
+    db.close()
+    return redirect(url_for('admin_users'))
+
+@app.route('/admin/audit-logs')
+@login_required
+@admin_required
+def admin_audit_logs():
+    """View audit logs"""
+    db = get_db_session()
+    logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(100).all()
+    db.close()
+    return render_template('admin_audit_logs.html', logs=logs)
+
 # Error handlers
 @app.errorhandler(429)
 def rate_limit_handler(e):
     return render_template('error.html', message='Too many requests. Please slow down.'), 429
 
 if __name__ == '__main__':
+    import ssl
     try:
+        # Enable HTTPS with self-signed certificate for development
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(certfile='server.crt', keyfile='server.key')
+        app.run(debug=False, host='127.0.0.1', port=5000, ssl_context=context)
+    except FileNotFoundError:
+        print("⚠️  SSL certificates not found. Generating self-signed certificates...")
+        print("   Run: openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt -days 365 -nodes -subj '/CN=localhost'")
+        print("   Falling back to HTTP (cookies won't work properly without HTTPS)")
         app.run(debug=False, host='127.0.0.1', port=5000)
     finally:
         scheduler.shutdown()

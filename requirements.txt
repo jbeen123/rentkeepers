@@ -12,3 +12,4 @@ gunicorn==21.2.0
 requests==2.31.0
 pyotp==2.9.0
 qrcode[pil]==7.4.2
+flask-cors==4.0.0

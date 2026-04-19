@@ -1,3 +1,7 @@
+"""
+RentKeepers Database Models
+Flask-SQLAlchemy compatible models with fee tracking
+"""
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, func, Boolean, Text, Date
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from datetime import datetime, timedelta
@@ -18,6 +22,7 @@ if DATABASE_URL.startswith('postgres://'):
 
 engine = create_engine(DATABASE_URL, echo=False)
 Session = sessionmaker(bind=engine)
+
 
 class User(Base):
     __tablename__ = 'users'
@@ -43,6 +48,12 @@ class User(Base):
     pending_crypto_amount = Column(Float, nullable=True)
     pending_crypto_currency = Column(String(10), nullable=True)
     
+    # Payment processing settings
+    card_fee_percentage = Column(Float, default=2.9)  # Landlord's fee rate
+    card_fee_fixed = Column(Float, default=0.30)
+    ach_fee_percentage = Column(Float, default=0.0)  # Usually free
+    ach_fee_fixed = Column(Float, default=0.0)
+    
     # Email reminder settings
     reminder_enabled = Column(Boolean, default=False)
     reminder_days_before = Column(Integer, default=3)
@@ -52,6 +63,9 @@ class User(Base):
     totp_secret = Column(String(32), nullable=True)  # Encrypted TOTP secret
     totp_enabled = Column(Boolean, default=False)  # 2FA enabled flag
     totp_verified_at = Column(DateTime, nullable=True)  # When 2FA was last verified
+    
+    # Admin flag
+    is_admin = Column(Boolean, default=False)
     
     # Tenant limits
     @property
@@ -88,6 +102,9 @@ class User(Base):
     tenants = relationship("Tenant", back_populates="user", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
     properties = relationship("Property", back_populates="user", cascade="all, delete-orphan")
+    expenses = relationship("Expense", back_populates="user", cascade="all, delete-orphan")
+    company_settings = relationship("CompanySettings", back_populates="user", uselist=False)
+    statements = relationship("OwnerStatementRecord", back_populates="user", cascade="all, delete-orphan")
     
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -98,7 +115,7 @@ class User(Base):
     def is_authenticated(self):
         return True
     
-    def is_active(self):
+    def is_active_status(self):
         return self.is_active
     
     def is_anonymous(self):
@@ -132,6 +149,7 @@ class User(Base):
             issuer_name="RentKeepers"
         )
 
+
 class Property(Base):
     """Multi-property support - landlords can have multiple properties"""
     __tablename__ = 'properties'
@@ -159,6 +177,9 @@ class Property(Base):
     insurance_cost = Column(Float, nullable=True)
     maintenance_budget = Column(Float, nullable=True)
     
+    # Management fee settings
+    management_fee_percent = Column(Float, default=10.0)
+    
     # Status
     status = Column(String(20), default='active')  # active, sold, archived
     
@@ -168,6 +189,8 @@ class Property(Base):
     # Relationships
     user = relationship("User", back_populates="properties")
     tenants = relationship("Tenant", back_populates="property_rel")
+    expenses = relationship("Expense", back_populates="property_rel")
+    statements = relationship("OwnerStatementRecord", back_populates="property_rel")
     
     @property
     def occupancy_rate(self):
@@ -185,6 +208,7 @@ class Property(Base):
     def annual_income(self):
         """Total annual rental income"""
         return self.monthly_income * 12
+
 
 class Tenant(Base):
     __tablename__ = 'tenants'
@@ -208,6 +232,11 @@ class Tenant(Base):
     portal_enabled = Column(Boolean, default=False)
     portal_token = Column(String(64), nullable=True)
     
+    # Payment preferences
+    preferred_payment_method = Column(String(20), default='card')  # card, ach, check
+    card_last4 = Column(String(4), nullable=True)  # Last 4 digits of saved card
+    stripe_customer_id = Column(String(100), nullable=True)
+    
     # Status
     is_active = Column(Boolean, default=True)  # False = former tenant
     moved_out_date = Column(Date, nullable=True)
@@ -229,23 +258,185 @@ class Tenant(Base):
     def is_paid_current(self):
         return self.total_paid_this_month >= self.monthly_rent
 
+
 class Payment(Base):
     __tablename__ = 'payments'
     
     id = Column(Integer, primary_key=True)
     tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    amount_paid = Column(Float, nullable=False)
-    for_month = Column(String(7), nullable=False)
+    
+    # Payment amounts
+    amount_paid = Column(Float, nullable=False)  # What tenant actually paid
+    rent_amount = Column(Float, nullable=False)  # Base rent amount
+    fee_amount = Column(Float, default=0.0)  # Processing fee
+    total_amount = Column(Float, nullable=False)  # amount_paid + fee_amount
+    
+    # Fee breakdown
+    stripe_fee = Column(Float, default=0.0)  # Stripe's fee
+    platform_fee = Column(Float, default=0.0)  # RentKeepers fee (if any)
+    
+    # Payment details
+    for_month = Column(String(7), nullable=False)  # YYYY-MM
     payment_date = Column(DateTime, default=datetime.utcnow)
-    payment_method = Column(String(20))
+    payment_method = Column(String(20))  # card, ach, check, cash
+    payment_type = Column(String(20), default='rent')  # rent, deposit, fee, other
     notes = Column(String(255))
+    
+    # Payment status
+    status = Column(String(20), default='completed')  # pending, completed, failed, refunded
     
     # Stripe integration
     stripe_payment_intent_id = Column(String(100), nullable=True)
+    stripe_charge_id = Column(String(100), nullable=True)
+    
+    # Refund tracking
+    refunded_amount = Column(Float, default=0.0)
+    refund_date = Column(DateTime, nullable=True)
     
     tenant = relationship("Tenant", back_populates="payments")
     user = relationship("User", back_populates="payments")
+
+
+class Expense(Base):
+    """Track property expenses for owner statements"""
+    __tablename__ = 'expenses'
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    property_id = Column(Integer, ForeignKey('properties.id'), nullable=False)
+    
+    # Expense details
+    description = Column(String(255), nullable=False)
+    category = Column(String(50), nullable=False)  # maintenance, insurance, taxes, utilities, etc.
+    amount = Column(Float, nullable=False)
+    
+    # Date tracking
+    expense_date = Column(Date, nullable=False)
+    for_month = Column(String(7), nullable=True)  # YYYY-MM format for recurring expenses
+    
+    # Vendor/contractor info
+    vendor_name = Column(String(100), nullable=True)
+    vendor_invoice = Column(String(100), nullable=True)
+    
+    # Status
+    is_tax_deductible = Column(Boolean, default=True)
+    receipt_url = Column(String(500), nullable=True)  # S3/file path
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", back_populates="expenses")
+    property_rel = relationship("Property", back_populates="expenses")
+
+
+class CompanySettings(Base):
+    """Company branding and settings for owner statements"""
+    __tablename__ = 'company_settings'
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, unique=True)
+    
+    # Company info for statements
+    company_name = Column(String(100), nullable=False, default='RentKeepers')
+    company_address = Column(String(255), nullable=True)
+    company_city = Column(String(100), nullable=True)
+    company_state = Column(String(50), nullable=True)
+    company_zip = Column(String(20), nullable=True)
+    company_phone = Column(String(20), nullable=True)
+    company_email = Column(String(120), nullable=True)
+    company_website = Column(String(200), nullable=True)
+    
+    # Logo
+    company_logo_url = Column(String(500), nullable=True)
+    
+    # Statement settings
+    default_management_fee_percent = Column(Float, default=10.0)
+    statement_footer_text = Column(Text, nullable=True)
+    statement_payment_terms = Column(String(255), default='Payment will be processed within 2-3 business days.')
+    
+    # Email settings for statements
+    statement_email_subject = Column(String(255), default='Your Monthly Owner Statement - {period}')
+    statement_email_template = Column(Text, nullable=True)
+    
+    # Auto-send settings
+    auto_send_statements = Column(Boolean, default=False)
+    auto_send_day = Column(Integer, default=5)  # Day of month to send
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship
+    user = relationship("User", back_populates="company_settings")
+
+
+class OwnerStatementRecord(Base):
+    """Track generated owner statements"""
+    __tablename__ = 'owner_statements'
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    property_id = Column(Integer, ForeignKey('properties.id'), nullable=False)
+    
+    # Statement period
+    month = Column(Integer, nullable=False)
+    year = Column(Integer, nullable=False)
+    
+    # Financial summary (snapshot at generation time)
+    total_income = Column(Float, default=0.0)
+    total_expenses = Column(Float, default=0.0)
+    management_fee = Column(Float, default=0.0)
+    management_fee_percent = Column(Float, default=10.0)
+    net_to_owner = Column(Float, default=0.0)
+    
+    # File info
+    pdf_filename = Column(String(255), nullable=True)
+    pdf_path = Column(String(500), nullable=True)
+    pdf_size = Column(Integer, nullable=True)  # bytes
+    
+    # Status
+    status = Column(String(20), default='draft')  # draft, generated, sent, viewed
+    
+    # Email tracking
+    email_sent = Column(Boolean, default=False)
+    email_sent_at = Column(DateTime, nullable=True)
+    email_recipients = Column(String(500), nullable=True)  # comma-separated
+    
+    # View tracking
+    viewed_at = Column(DateTime, nullable=True)
+    view_count = Column(Integer, default=0)
+    
+    # Metadata
+    generated_at = Column(DateTime, default=datetime.utcnow)
+    generated_by = Column(Integer, ForeignKey('users.id'), nullable=True)
+    
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id], back_populates="statements")
+    property_rel = relationship("Property", back_populates="statements")
+
+
+class StatementEmailLog(Base):
+    """Log of sent statement emails"""
+    __tablename__ = 'statement_email_logs'
+    
+    id = Column(Integer, primary_key=True)
+    statement_id = Column(Integer, ForeignKey('owner_statements.id'), nullable=False)
+    
+    recipient_email = Column(String(120), nullable=False)
+    recipient_name = Column(String(100), nullable=True)
+    
+    subject = Column(String(255), nullable=False)
+    body_preview = Column(Text, nullable=True)
+    
+    status = Column(String(20), default='sent')  # sent, delivered, opened, bounced, failed
+    sent_at = Column(DateTime)
+    opened_at = Column(DateTime, nullable=True)
+    
+    # Error tracking
+    error_message = Column(Text, nullable=True)
+
 
 class Invoice(Base):
     """Generated invoices for tenants"""
@@ -266,6 +457,7 @@ class Invoice(Base):
     
     tenant = relationship("Tenant")
     user = relationship("User")
+
 
 class MaintenanceRequest(Base):
     """Track maintenance issues per property"""
@@ -288,6 +480,7 @@ class MaintenanceRequest(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+
 class AuditLog(Base):
     __tablename__ = 'audit_logs'
     
@@ -300,13 +493,16 @@ class AuditLog(Base):
     ip_address = Column(String(45))
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
 def init_db():
     """Create all tables if they don't exist"""
     Base.metadata.create_all(engine)
 
+
 def get_db_session():
     """Get a new database session"""
     return Session()
+
 
 def log_action(user_id, action, resource_type=None, resource_id=None, details=None, ip_address=None):
     """Log an action to the audit log"""

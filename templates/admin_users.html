@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Users - RentKeepers{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-people me-2"></i>Manage Users</h2>
+    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back to Admin
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-striped mb-0">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Email</th>
+                    <th>Subscription</th>
+                    <th>Admin</th>
+                    <th>Joined</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user.id }}</td>
+                    <td>
+                        {{ user.email }}
+                        {% if user.id == current_user.id %}
+                            <span class="badge bg-primary">You</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge bg-{{ 'success' if user.subscription_tier != 'free' else 'secondary' }}">
+                            {{ user.subscription_tier }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if user.is_admin %}
+                            <span class="badge bg-danger"><i class="bi bi-shield-fill"></i> Admin</span>
+                        {% else %}
+                            <span class="badge bg-light text-dark">-</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ user.created_at.strftime('%Y-%m-%d') }}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('admin_toggle_admin', user_id=user.id) }}" class="d-inline">
+                            <button type="submit" class="btn btn-sm {{ 'btn-warning' if user.is_admin else 'btn-outline-warning' }}"
+                                    {{ 'disabled' if user.id == current_user.id }}">
+                                {{ 'Remove Admin' if user.is_admin else 'Make Admin' }}
+                            </button>
+                        </form>
+                        
+                        <form method="POST" action="{{ url_for('admin_delete_user', user_id=user.id) }}" class="d-inline ms-2"
+                                  onsubmit="return confirm('Delete this user? All their data will be lost.')">
+                            <button type="submit" class="btn btn-sm btn-danger"
+                                    {{ 'disabled' if user.id == current_user.id }}">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

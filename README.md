@@ -79,10 +79,26 @@ python app.py
 - **Email:** Flask-Mail (Gmail SMTP)
 - **Deploy:** Docker + Railway
 
+## Mobile App 📱
+
+A React Native mobile app is available in the `mobile/` directory:
+
+```bash
+cd mobile/RentKeepers
+npm install
+npx expo start
+```
+
+Features:
+- 📊 Dashboard with rent stats
+- 👥 Quick tenant management
+- 💰 Log payments on the go
+- 🔐 Full 2FA support
+
 ## Contributing
 
 This is a solo project but open to PRs. Main areas:
-- Mobile app (React Native?)
+- ~~Mobile app (React Native?)~~ ✅ Done
 - ACH payments integration
 - Tenant portal (for renters to pay online)
 
