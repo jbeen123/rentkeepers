@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>📅 ICS Calendar Generator - No Credentials Needed!</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    .header {
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .header h1 { color: #1a1a2e; margin-bottom: 10px; }
+    .badge {
+      display: inline-block;
+      background: #22c55e;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 10px;
+    }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+    .card {
+      background: white;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .card h2 { color: #1a1a2e; margin-bottom: 15px; font-size: 18px; }
+    .form-group { margin-bottom: 15px; }
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      color: #333;
+      font-weight: 500;
+      font-size: 14px;
+    }
+    .form-group input, .form-group textarea, .form-group select {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    .form-group input:focus, .form-group textarea:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    .btn {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: all 0.3s;
+    }
+    .btn:hover {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    .btn-download {
+      background: #22c55e;
+      margin-top: 10px;
+    }
+    .btn-download:hover { background: #16a34a; }
+    .status {
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 15px;
+      font-weight: 500;
+    }
+    .status-success { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+    .status-error { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+    .info-box {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      padding: 15px;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+    .info-box h3 { color: #1e40af; margin-bottom: 10px; font-size: 14px; }
+    .info-box ul { margin-left: 20px; color: #1e3a8a; }
+    .info-box li { margin-bottom: 5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📅 ICS Calendar Generator</h1>
+      <p>Generate calendar events for your property management</p>
+      <span class="badge">✅ No API Credentials Required</span>
+      <span class="badge" style="background: #3b82f6;">🔓 Works with All Calendar Apps</span>
+    </div>
+
+    <div class="grid">
+      <!-- Rent Reminder -->
+      <div class="card">
+        <h2>💰 Rent Reminder</h2>
+        <form onsubmit="generateEvent(event, 'rent')">
+          <div class="form-group">
+            <label>Tenant Name</label>
+            <input type="text" name="tenantName" placeholder="John Smith" required>
+          </div>
+          <div class="form-group">
+            <label>Property Address</label>
+            <input type="text" name="propertyAddress" placeholder="123 Main St, Unit 101">
+          </div>
+          <div class="form-group">
+            <label>Rent Amount ($)</label>
+            <input type="number" name="amount" placeholder="1500" step="0.01" required>
+          </div>
+          <div class="form-group">
+            <label>Due Date</label>
+            <input type="date" name="dueDate" required>
+          </div>
+          <button type="submit" class="btn">📅 Generate ICS</button>
+        </form>
+      </div>
+
+      <!-- Maintenance -->
+      <div class="card">
+        <h2>🔧 Maintenance Appointment</h2>
+        <form onsubmit="generateEvent(event, 'maintenance')">
+          <div class="form-group">
+            <label>Property Address</label>
+            <input type="text" name="propertyAddress" placeholder="456 Oak Ave" required>
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <textarea name="description" placeholder="Fix leaking faucet..." rows="2"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Technician</label>
+            <input type="text" name="technician" placeholder="Mike's Plumbing">
+          </div>
+          <div class="form-group">
+            <label>Scheduled Date & Time</label>
+            <input type="datetime-local" name="scheduledDate" required>
+          </div>
+          <button type="submit" class="btn">📅 Generate ICS</button>
+        </form>
+      </div>
+
+      <!-- Property Showing -->
+      <div class="card">
+        <h2>🏠 Property Showing</h2>
+        <form onsubmit="generateEvent(event, 'showing')">
+          <div class="form-group">
+            <label>Property Address</label>
+            <input type="text" name="propertyAddress" placeholder="789 Pine Rd" required>
+          </div>
+          <div class="form-group">
+            <label>Client Name</label>
+            <input type="text" name="clientName" placeholder="Sarah Johnson">
+          </div>
+          <div class="form-group">
+            <label>Scheduled Date & Time</label>
+            <input type="datetime-local" name="scheduledDate" required>
+          </div>
+          <button type="submit" class="btn">📅 Generate ICS</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="info-box">
+      <h3>✨ How It Works</h3>
+      <ul>
+        <li>Fill out the form for the type of event you want to create</li>
+        <li>Click "Generate ICS" to download the calendar file</li>
+        <li>Open the .ics file in any calendar app (Google Calendar, Apple Calendar, Outlook, etc.)</li>
+        <li>The event will be added to your calendar automatically!</li>
+      </ul>
+    </div>
+
+    <div class="info-box" style="margin-top: 15px; background: #fef3c7; border-color: #fcd34d;">
+      <h3 style="color: #92400e;">📱 Compatible With</h3>
+      <ul style="color: #78350f;">
+        <li>✅ Google Calendar (import or email attachment)</li>
+        <li>✅ Apple Calendar (iCal)</li>
+        <li>✅ Microsoft Outlook</li>
+        <li>✅ Yahoo Calendar</li>
+        <li>✅ Any calendar app that supports .ics format</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:3000/api/ics';
+
+    async function generateEvent(event, type) {
+      event.preventDefault();
+      const form = event.target;
+      const formData = new FormData(form);
+      const data = Object.fromEntries(formData.entries());
+
+      try {
+        const response = await fetch(`${API_BASE}/${type}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to generate');
+        }
+
+        // Get the blob and download
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        // Get filename from Content-Disposition header
+        const disposition = response.headers.get('Content-Disposition');
+        let filename = `${type}-event.ics`;
+        if (disposition) {
+          const match = disposition.match(/filename="(.+)"/);
+          if (match) filename = match[1];
+        }
+        
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        alert('✅ Calendar event downloaded! Open the .ics file to add to your calendar.');
+        form.reset();
+      } catch (error) {
+        alert('❌ Error: ' + error.message);
+      }
+    }
+
+    // Set default dates
+    document.addEventListener('DOMContentLoaded', () => {
+      const today = new Date().toISOString().split('T')[0];
+      const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      
+      const dateInputs = document.querySelectorAll('input[type="date"]');
+      dateInputs.forEach(input => {
+        if (!input.value) input.value = nextWeek;
+      });
+
+      const datetimeInputs = document.querySelectorAll('input[type="datetime-local"]');
+      datetimeInputs.forEach(input => {
+        if (!input.value) {
+          const nextWeek10am = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+          nextWeek10am.setHours(10, 0, 0, 0);
+          input.value = nextWeek10am.toISOString().slice(0, 16);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

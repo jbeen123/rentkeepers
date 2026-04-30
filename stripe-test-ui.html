@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RentKeepers - Stripe Autopay Test</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .test-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+        .test-section h2 {
+            color: #495057;
+            font-size: 20px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .test-card {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            transition: all 0.2s;
+        }
+        .test-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .test-card h3 {
+            color: #333;
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+        .test-card p {
+            color: #666;
+            font-size: 13px;
+            margin-bottom: 12px;
+        }
+        .test-card code {
+            display: block;
+            background: #f1f3f5;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #495057;
+            margin-bottom: 10px;
+            word-break: break-all;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+            width: 100%;
+        }
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            display: none;
+        }
+        .result.success {
+            background: #d4edda;
+            color: #155724;
+            display: block;
+        }
+        .result.error {
+            background: #f8d7da;
+            color: #721c24;
+            display: block;
+        }
+        .test-cards {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .test-cards h3 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+        .test-cards ul {
+            list-style: none;
+            color: #856404;
+            font-size: 14px;
+        }
+        .test-cards li {
+            padding: 5px 0;
+            border-bottom: 1px solid #ffeaa7;
+        }
+        .test-cards li:last-child {
+            border-bottom: none;
+        }
+        .endpoint-list {
+            background: #2d3748;
+            color: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .endpoint-list h3 {
+            margin-bottom: 15px;
+            color: #63b3ed;
+        }
+        .endpoint {
+            font-family: 'Monaco', 'Consolas', monospace;
+            padding: 8px 12px;
+            background: #1a202c;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        .endpoint .method {
+            display: inline-block;
+            width: 60px;
+            font-weight: bold;
+        }
+        .endpoint .method.get { color: #63b3ed; }
+        .endpoint .method.post { color: #48bb78; }
+        .endpoint .method.delete { color: #f56565; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💳 Stripe Autopay Test Center</h1>
+        <p class="subtitle">Test your Stripe integration with real API calls</p>
+        
+        <div id="statusBadge" class="status-badge status-error">Checking connection...</div>
+
+        <!-- Connection Tests -->
+        <div class="test-section">
+            <h2>🔌 Connection Tests</h2>
+            <div class="test-grid">
+                <div class="test-card">
+                    <h3>Health Check</h3>
+                    <p>Verify Stripe connection</p>
+                    <code>GET /api/stripe/health</code>
+                    <button onclick="testHealth()">Test Connection</button>
+                    <div id="healthResult" class="result"></div>
+                </div>
+                <div class="test-card">
+                    <h3>Test Mode</h3>
+                    <p>Check if using test keys</p>
+                    <code>GET /api/stripe/test-mode</code>
+                    <button onclick="testMode()">Check Mode</button>
+                    <div id="modeResult" class="result"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Customer Tests -->
+        <div class="test-section">
+            <h2>👤 Customer Management</h2>
+            <div class="test-grid">
+                <div class="test-card">
+                    <h3>Create Customer</h3>
+                    <p>Create a test customer</p>
+                    <code>POST /api/stripe/customer</code>
+                    <button onclick="createCustomer()">Create Customer</button>
+                    <div id="customerResult" class="result"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Tests -->
+        <div class="test-section">
+            <h2>💰 Payment Tests</h2>
+            <div class="test-grid">
+                <div class="test-card">
+                    <h3>One-Time Payment</h3>
+                    <p>Create payment intent</p>
+                    <code>POST /api/stripe/payment</code>
+                    <button onclick="createPayment()">Create Payment</button>
+                    <div id="paymentResult" class="result"></div>
+                </div>
+                <div class="test-card">
+                    <h3>Invoice</h3>
+                    <p>Create test invoice</p>
+                    <code>POST /api/stripe/invoice</code>
+                    <button onclick="createInvoice()">Create Invoice</button>
+                    <div id="invoiceResult" class="result"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Cards -->
+        <div class="test-cards">
+            <h3>💳 Test Card Numbers (Test Mode Only)</h3>
+            <ul>
+                <li><strong>Success:</strong> 4242 4242 4242 4242</li>
+                <li><strong>Decline:</strong> 4000 0000 0000 0002</li>
+                <li><strong>Insufficient Funds:</strong> 4000 0000 0000 9995</li>
+                <li><strong>Lost Card:</strong> 4000 0000 0000 9987</li>
+            </ul>
+            <p style="margin-top: 10px; font-size: 13px;">
+                <strong>Expiry:</strong> Any future date (e.g., 12/34)<br>
+                <strong>CVC:</strong> Any 3 digits (e.g., 123)<br>
+                <strong>ZIP:</strong> Any 5 digits (e.g., 12345)
+            </p>
+        </div>
+
+        <!-- API Endpoints -->
+        <div class="endpoint-list">
+            <h3>📋 All Available Endpoints</h3>
+            <div class="endpoint"><span class="method get">GET</span>/api/stripe/health</div>
+            <div class="endpoint"><span class="method get">GET</span>/api/stripe/test-mode</div>
+            <div class="endpoint"><span class="method post">POST</span>/api/stripe/customer</div>
+            <div class="endpoint"><span class="method post">POST</span>/api/stripe/setup-intent</div>
+            <div class="endpoint"><span class="method post">POST</span>/api/stripe/attach-payment-method</div>
+            <div class="endpoint"><span class="method post">POST</span>/api/stripe/autopay/setup</div>
+            <div class="endpoint"><span class="method post">POST</span>/api/stripe/payment</div>
+            <div class="endpoint"><span class="method get">GET</span>/api/stripe/payment-methods/:customerId</div>
+            <div class="endpoint"><span class="method get">GET</span>/api/stripe/subscriptions/:customerId</div>
+            <div class="endpoint"><span class="method delete">DELETE</span>/api/stripe/subscription/:subscriptionId</div>
+            <div class="endpoint"><span class="method post">POST</span>/api/stripe/invoice</div>
+            <div class="endpoint"><span class="method post">POST</span>/api/stripe/refund</div>
+            <div class="endpoint"><span class="method post">POST</span>/api/stripe/webhook</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/stripe';
+        let testCustomerId = null;
+
+        // Check connection on load
+        window.onload = async () => {
+            const response = await fetch(`${API_BASE}/health`);
+            const data = await response.json();
+            const badge = document.getElementById('statusBadge');
+            
+            if (data.success) {
+                badge.className = 'status-badge status-success';
+                badge.textContent = '✅ Stripe Connected';
+            } else {
+                badge.className = 'status-badge status-error';
+                badge.textContent = '❌ Stripe Not Connected';
+            }
+        };
+
+        async function testHealth() {
+            const result = document.getElementById('healthResult');
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                result.className = 'result ' + (data.success ? 'success' : 'error');
+                result.textContent = data.success ? '✅ Connected!' : '❌ ' + data.message;
+            } catch (error) {
+                result.className = 'result error';
+                result.textContent = '❌ ' + error.message;
+            }
+        }
+
+        async function testMode() {
+            const result = document.getElementById('modeResult');
+            try {
+                const response = await fetch(`${API_BASE}/test-mode`);
+                const data = await response.json();
+                result.className = 'result ' + (data.testMode ? 'success' : 'error');
+                result.textContent = data.testMode ? '✅ Test Mode Active' : '⚠️ LIVE Mode!';
+            } catch (error) {
+                result.className = 'result error';
+                result.textContent = '❌ ' + error.message;
+            }
+        }
+
+        async function createCustomer() {
+            const result = document.getElementById('customerResult');
+            try {
+                const response = await fetch(`${API_BASE}/customer`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: 'test@example.com',
+                        name: 'Test Tenant',
+                        phone: '555-123-4567'
+                    })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    testCustomerId = data.customer.id;
+                    result.className = 'result success';
+                    result.textContent = `✅ Customer created: ${data.customer.id}`;
+                } else {
+                    result.className = 'result error';
+                    result.textContent = '❌ ' + data.error;
+                }
+            } catch (error) {
+                result.className = 'result error';
+                result.textContent = '❌ ' + error.message;
+            }
+        }
+
+        async function createPayment() {
+            const result = document.getElementById('paymentResult');
+            try {
+                const response = await fetch(`${API_BASE}/payment`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        amount: 150000, // $1,500.00
+                        currency: 'usd',
+                        description: 'Test Rent Payment',
+                        customerId: testCustomerId || 'cus_test'
+                    })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    result.className = 'result success';
+                    result.textContent = `✅ Payment intent: ${data.paymentIntentId}`;
+                } else {
+                    result.className = 'result error';
+                    result.textContent = '❌ ' + data.error;
+                }
+            } catch (error) {
+                result.className = 'result error';
+                result.textContent = '❌ ' + error.message;
+            }
+        }
+
+        async function createInvoice() {
+            const result = document.getElementById('invoiceResult');
+            try {
+                const response = await fetch(`${API_BASE}/invoice`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        amount: 150000,
+                        currency: 'usd',
+                        description: 'Test Invoice - May 2026',
+                        customerId: testCustomerId || 'cus_test',
+                        send: false
+                    })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    result.className = 'result success';
+                    result.textContent = `✅ Invoice: ${data.invoice.id}`;
+                } else {
+                    result.className = 'result error';
+                    result.textContent = '❌ ' + data.error;
+                }
+            } catch (error) {
+                result.className = 'result error';
+                result.textContent = '❌ ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

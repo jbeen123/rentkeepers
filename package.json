@@ -1,0 +1,39 @@
+{
+  "name": "rentkeepers",
+  "version": "1.0.0",
+  "description": "Complete Property Management System with Document Upload, Calendar, Late Fees, and Stripe Payments",
+  "main": "main-server.js",
+  "scripts": {
+    "start": "node main-server.js",
+    "dev": "node main-server.js",
+    "test": "node test-stripe-setup.js",
+    "test:connection": "cd ../Projects/rentkeepers/mobile && node test-connection.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/rentkeepers.git"
+  },
+  "keywords": [
+    "property-management",
+    "real-estate",
+    "rent-collection",
+    "stripe",
+    "express"
+  ],
+  "author": "RentKeepers",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "googleapis": "^171.4.0",
+    "mongoose": "^9.6.1",
+    "multer": "^2.1.1",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^8.0.7",
+    "pdfkit": "^0.18.0",
+    "stripe": "^22.1.0"
+  }
+}

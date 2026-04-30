@@ -1,0 +1,82 @@
+services:
+  # Main Web Service
+  - type: web
+    name: rentkeepers
+    env: node
+    region: oregon
+    plan: starter
+    buildCommand: npm install
+    startCommand: node main-server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: APP_URL
+        fromService:
+          name: rentkeepers
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      # Stripe (add your keys in Render dashboard)
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      # Email (add your SMTP credentials)
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM_NAME
+        value: RentKeepers
+        sync: false
+      # Admin
+      - key: ADMIN_EMAIL
+        sync: false
+      # Late Fees
+      - key: LATE_FEE_ENABLED
+        value: "true"
+      - key: LATE_FEE_SCHEDULE
+        value: "0 3 * * *"
+      - key: DEFAULT_GRACE_PERIOD_DAYS
+        value: "5"
+      - key: DEFAULT_LATE_FEE_TYPE
+        value: "percentage"
+      - key: DEFAULT_LATE_FEE_PERCENTAGE
+        value: "5"
+
+  # Background Worker for Scheduled Tasks
+  - type: worker
+    name: rentkeepers-worker
+    env: node
+    region: oregon
+    buildCommand: npm install
+    startCommand: node start-late-fee-service.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+
+  # PostgreSQL Database (optional - for full features)
+  - type: psql
+    name: rentkeepers-db
+    databaseName: rentkeepers
+    plan: starter
+    ipAllowList: []
+
+databases:
+  - name: rentkeepers-db
+    databaseName: rentkeepers
