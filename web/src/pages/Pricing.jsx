@@ -8,37 +8,63 @@ export default function Pricing() {
     {
       name: 'Free',
       price: '$0',
-      period: '',
-      tenants: '3 tenants',
-      features: ['Basic tracking', 'CSV export', 'Email support'],
+      period: '/month',
+      tenants: 'Up to 2 units',
+      features: [
+        'Basic payment tracking',
+        'Tenant management',
+        'Dashboard overview',
+        'Email support'
+      ],
       cta: 'Get Started',
       popular: false,
     },
     {
-      name: 'Monthly',
+      name: 'Starter',
       price: '$9',
       period: '/month',
-      tenants: 'Unlimited tenants',
-      features: ['Email reminders', 'Import/export', 'Priority support'],
-      cta: 'Subscribe',
+      tenants: 'Up to 10 units',
+      features: [
+        'Advanced payment tracking',
+        'Email reminders',
+        'CSV export',
+        'Financial dashboard',
+        'Priority support'
+      ],
+      cta: 'Start Free Trial',
       popular: true,
     },
     {
-      name: 'Yearly',
-      price: '$79',
-      period: '/year',
-      tenants: 'Unlimited tenants',
-      features: ['27% off monthly', 'All monthly features', 'Annual reports'],
-      cta: 'Subscribe',
+      name: 'Professional',
+      price: '$29',
+      period: '/month',
+      tenants: 'Up to 50 units',
+      features: [
+        'All Starter features',
+        'PDF owner statements',
+        'Auto-scheduled reports',
+        'Multi-property support',
+        'Priority email support',
+        'Custom branding'
+      ],
+      cta: 'Start Free Trial',
       popular: false,
     },
     {
-      name: 'Lifetime',
-      price: '$149',
-      period: 'one-time',
-      tenants: 'Unlimited forever',
-      features: ['Pay once, use forever', 'All features', 'Lifetime updates'],
-      cta: 'Buy Now',
+      name: 'Enterprise',
+      price: '$99',
+      period: '/month',
+      tenants: 'Unlimited units',
+      features: [
+        'All Pro features',
+        'Custom branding',
+        'API access',
+        'Dedicated account manager',
+        '24/7 priority support',
+        'Custom integrations',
+        'SLA guarantee'
+      ],
+      cta: 'Contact Sales',
       popular: false,
     },
   ];
@@ -56,7 +82,7 @@ export default function Pricing() {
             <div
               key={plan.name}
               className={`bg-white rounded-lg shadow-lg p-6 ${
-                plan.popular ? 'ring-2 ring-blue-600' : ''
+                plan.popular ? 'ring-2 ring-blue-600 transform scale-105' : ''
               }`}
             >
               {plan.popular && (
@@ -78,7 +104,18 @@ export default function Pricing() {
                   </li>
                 ))}
               </ul>
-              {isAuthenticated ? (
+              {plan.name === 'Enterprise' ? (
+                <button
+                  onClick={() => alert('Contact us at sales@rentkeepers.com for Enterprise pricing!')}
+                  className={`w-full py-2 px-4 rounded font-bold ${
+                    plan.popular
+                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'bg-gray-800 text-white hover:bg-gray-900'
+                  }`}
+                >
+                  {plan.cta}
+                </button>
+              ) : isAuthenticated ? (
                 <button
                   className={`w-full py-2 px-4 rounded font-bold ${
                     plan.popular
@@ -99,6 +136,12 @@ export default function Pricing() {
                 >
                   {plan.cta}
                 </Link>
+              )}
+              {plan.name === 'Starter' && (
+                <small className="text-muted d-block mt-2">14-day free trial</small>
+              )}
+              {plan.name === 'Professional' && (
+                <small className="text-muted d-block mt-2">14-day free trial</small>
               )}
             </div>
           ))}

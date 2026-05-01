@@ -1,19 +1,34 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
-import { CreditCard } from 'lucide-react';
+import { CreditCard, FileText } from 'lucide-react';
 import { api } from '../api/client';
 import PaymentProcessor from '../components/PaymentProcessor';
+import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
   const [selectedTenant, setSelectedTenant] = useState(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showCharts, setShowCharts] = useState(false);
 
   const { data: dashboardData, isLoading } = useQuery({
     queryKey: ['dashboard'],
     queryFn: () => api.get('/api/dashboard'),
   });
+
+  const { data: chartData } = useQuery({
+    queryKey: ['dashboard-charts'],
+    queryFn: () => api.get('/api/dashboard/charts'),
+    enabled: showCharts,
+  });
+
+  const { data: applicationsData } = useQuery({
+    queryKey: ['applications'],
+    queryFn: () => api.get('/api/applications'),
+  });
+
+  const pendingApplications = applicationsData?.applications?.filter(a => a.status === 'pending').length || 0;
 
   const handlePaymentSuccess = () => {
     setShowPaymentModal(false);
@@ -45,7 +60,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-lg shadow p-6">
           <div className="text-3xl font-bold text-green-600">${total_collected.toFixed(2)}</div>
           <div className="text-gray-500 text-sm uppercase tracking-wide">Collected This Month</div>
@@ -60,7 +75,155 @@ export default function Dashboard() {
           </div>
           <div className="text-gray-500 text-sm uppercase tracking-wide">Outstanding</div>
         </div>
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex justify-between items-start">
+            <div>
+              <div className={`text-3xl font-bold ${pendingApplications > 0 ? 'text-yellow-600' : 'text-gray-400'}`}>
+                {pendingApplications}
+              </div>
+              <div className="text-gray-500 text-sm uppercase tracking-wide">Pending Applications</div>
+            </div>
+            {pendingApplications > 0 && (
+              <Link to="/applications" className="text-yellow-600 hover:text-yellow-800">
+                <FileText className="w-6 h-6" />
+              </Link>
+            )}
+          </div>
+        </div>
       </div>
+
+      {/* Recent Activity */}
+      {(pendingApplications > 0 || chartData?.income?.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          {pendingApplications > 0 && (
+            <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-lg shadow p-4">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-bold text-yellow-800">⚠️ Action Required</h3>
+                <Link to="/applications" className="text-yellow-600 hover:text-yellow-800 text-sm font-medium">
+                  View All →
+                </Link>
+              </div>
+              <p className="text-yellow-700 text-sm">
+                You have <strong>{pendingApplications} pending application{pendingApplications > 1 ? 's' : ''}</strong> waiting for review.
+              </p>
+            </div>
+          )}
+          
+          {chartData?.income?.length > 0 && (
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg shadow p-4">
+              <h3 className="font-bold text-green-800 mb-2">💰 Income Trend</h3>
+              <p className="text-green-700 text-sm">
+                Latest month: <strong>${chartData.income[chartData.income.length - 1]?.income || 0}</strong>
+                {chartData.income.length > 1 && (
+                  <span className="ml-2">
+                    {chartData.income[chartData.income.length - 1]?.income >= chartData.income[chartData.income.length - 2]?.income ? '↑' : '↓'} 
+                    {((chartData.income[chartData.income.length - 1]?.income - chartData.income[chartData.income.length - 2]?.income) / chartData.income[chartData.income.length - 2]?.income * 100).toFixed(1)}%
+                  </span>
+                )}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Charts Toggle */}
+      <div className="mb-6">
+        <button
+          onClick={() => setShowCharts(!showCharts)}
+          className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 flex items-center gap-2"
+        >
+          📈 {showCharts ? 'Hide' : 'Show'} Analytics
+        </button>
+      </div>
+
+      {/* Charts Section */}
+      {showCharts && chartData && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          {/* Monthly Income Chart */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold mb-4">💰 Monthly Income Trend</h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={chartData.income || []}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip formatter={(value) => `$${value}`} />
+                <Bar dataKey="income" fill="#10b981" name="Income" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Payment Status Pie Chart */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold mb-4">📊 Payment Status</h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart>
+                <Pie
+                  data={[
+                    { name: 'Paid', value: chartData.payment_status?.paid || 0 },
+                    { name: 'Pending', value: chartData.payment_status?.pending || 0 },
+                    { name: 'Late', value: chartData.payment_status?.late || 0 },
+                  ]}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  <Cell fill="#10b981" />
+                  <Cell fill="#f59e0b" />
+                  <Cell fill="#ef4444" />
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Occupancy Rate Chart */}
+          {chartData.occupancy && chartData.occupancy.length > 0 && (
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="text-lg font-semibold mb-4">🏠 Occupancy Rate</h3>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={chartData.occupancy}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="property" />
+                  <YAxis domain={[0, 100]} />
+                  <Tooltip formatter={(value) => `${value}%`} />
+                  <Bar dataKey="rate" fill="#3b82f6" name="Occupancy %" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Payment Method Distribution */}
+          {chartData.payment_methods && chartData.payment_methods.length > 0 && (
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="text-lg font-semibold mb-4">💳 Payment Methods</h3>
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={chartData.payment_methods}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="count"
+                  >
+                    {chartData.payment_methods.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'][index % 4]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Rent Status Table */}
       <div className="bg-white rounded-lg shadow">

@@ -1,9 +1,10 @@
 // RentKeepers API Client
-const API_BASE_URL = 'http://localhost:5000'; // Update for production
+import { API_BASE_URL, ENDPOINTS } from '../config';
 
 class ApiClient {
   constructor() {
     this.baseUrl = API_BASE_URL;
+    console.log('🔌 API Client initialized:', this.baseUrl);
     this.token = null;
   }
 

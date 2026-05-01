@@ -23,8 +23,8 @@
                     </div>
                     <div class="mb-3">
                         <label for="monthly_rent" class="form-label">Monthly Rent ($) *</label>
-                        <input type="number" class="form-control" id="monthly_rent" name="monthly_rent" 
-                               step="0.01" min="0" placeholder="1200.00" required>
+                        <input type="text" inputmode="decimal" class="form-control" id="monthly_rent" name="monthly_rent" 
+                               pattern="[0-9,]*\.?[0-9]*" placeholder="1,200.00" required>
                     </div>
                     <div class="mb-3">
                         <label for="due_day" class="form-label">Rent Due Day (1-31) *</label>
@@ -132,4 +132,21 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Strip commas and dollar signs from number fields before form submission
+document.querySelector('form').addEventListener('submit', function(e) {
+    var rentField = document.getElementById('monthly_rent');
+    var val = rentField.value.replace(/[$,]/g, '');
+    rentField.value = val;
+    console.log('Submitting rent value:', val);
+});
+
+// Also strip on input (as user types)
+document.getElementById('monthly_rent').addEventListener('blur', function(e) {
+    this.value = this.value.replace(/[$,]/g, '');
+});
+</script>
 {% endblock %}

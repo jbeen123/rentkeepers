@@ -75,6 +75,37 @@
         </div>
     </div>
 
+    <!-- Yearly -->
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 border-success">
+            <div class="card-header text-center bg-success text-white">
+                <h4 class="mb-0">Yearly</h4>
+                <div>Save 17%</div>
+            </div>
+            <div class="card-body text-center">
+                <div class="display-5 mb-3">{{ yearly_price }}<span class="fs-6">/year</span></div>
+                <ul class="list-unstyled text-start">
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong>Everything</strong> in Monthly</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>17% savings</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Priority support</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Cancel anytime</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Best for landlords</li>
+                </ul>
+            </div>
+            <div class="card-footer border-0 bg-transparent text-center pb-4">
+                {% if current_user.is_authenticated %}
+                    {% if current_user.subscription_tier == 'free' %}
+                        <a href="{{ url_for('payment', tier='yearly') }}" class="btn btn-success w-100">Upgrade Yearly</a>
+                    {% else %}
+                        <button class="btn btn-success w-100" disabled>Subscribed</button>
+                    {% endif %}
+                {% else %}
+                    <a href="{{ url_for('register') }}" class="btn btn-success w-100">Get Started</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
     <!-- Lifetime -->
     <div class="col-md-4 mb-4">
         <div class="card h-100">

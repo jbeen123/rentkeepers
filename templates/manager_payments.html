@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Payments - Property Manager Portal{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="bi bi-cash-coin me-2"></i>Payments</h2>
+            <p class="text-muted">Payment history for all properties</p>
+        </div>
+        <div class="col-auto">
+            <a href="{{ url_for('manager_portal.manager_dashboard', token=token) }}" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    {% if payments %}
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th class="border-0 px-4 py-3">Tenant</th>
+                            <th class="border-0 px-4 py-3">Property</th>
+                            <th class="border-0 px-4 py-3">Month</th>
+                            <th class="border-0 px-4 py-3">Date Paid</th>
+                            <th class="border-0 px-4 py-3">Amount</th>
+                            <th class="border-0 px-4 py-3">Method</th>
+                            <th class="border-0 px-4 py-3">Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for payment in payments %}
+                        <tr>
+                            <td class="px-4 py-3">
+                                <div class="fw-bold">{{ payment.tenant.name if payment.tenant else 'N/A' }}</div>
+                            </td>
+                            <td class="px-4 py-3">
+                                {{ payment.tenant.property_address if payment.tenant and payment.tenant.property_address else 'N/A' }}
+                            </td>
+                            <td class="px-4 py-3">
+                                {{ payment.for_month|month_name if payment.for_month else 'N/A' }}
+                            </td>
+                            <td class="px-4 py-3">
+                                {{ payment.payment_date.strftime('%b %d, %Y') if payment.payment_date else 'N/A' }}
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="text-success fw-bold">${{ "%.2f"|format(payment.amount_paid) }}</span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="badge bg-light text-dark border">{{ payment.payment_method }}</span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <small class="text-muted">{{ payment.notes[:50] if payment.notes else '-' }}{% if payment.notes and payment.notes|length > 50 %}...{% endif %}</small>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col">
+            <div class="alert alert-info mb-0">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>Summary:</strong> Showing {{ payments|length }} recent payment{% if payments|length == 1 %}{% else %}s{% endif %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="bi bi-cash-coin text-muted" style="font-size: 4rem;"></i>
+        <h4 class="mt-3">No payments yet</h4>
+        <p class="text-muted">Payments will appear here once tenants start paying rent</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

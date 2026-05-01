@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}Submit Maintenance Request - RentKeepers{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <!-- Header -->
+            <div class="text-center mb-4">
+                <h2><i class="bi bi-tools me-2"></i>Maintenance Request</h2>
+                <p class="text-muted">Submit a maintenance issue for {{ tenant.property_address }}</p>
+            </div>
+
+            <!-- Submission Form -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>New Request</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <input type="hidden" name="token" value="{{ token }}">
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Issue Title *</label>
+                            <input type="text" class="form-control" name="title" 
+                                   placeholder="e.g., Leaking faucet, Broken AC, etc." required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Description *</label>
+                            <textarea class="form-control" name="description" rows="4" 
+                                      placeholder="Please describe the issue in detail..." required></textarea>
+                            <div class="form-text">Be as specific as possible about the problem</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Priority Level</label>
+                            <div class="row">
+                                <div class="col-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="priority" 
+                                               id="low" value="low" checked>
+                                        <label class="form-check-label" for="low">
+                                            <span class="badge bg-info">Low</span> - Non-urgent
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="priority" 
+                                               id="medium" value="medium">
+                                        <label class="form-check-label" for="medium">
+                                            <span class="badge bg-warning">Medium</span> - Needs attention
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-6 mt-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="priority" 
+                                               id="high" value="high">
+                                        <label class="form-check-label" for="high">
+                                            <span class="badge bg-danger">High</span> - Urgent
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-6 mt-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="priority" 
+                                               id="emergency" value="emergency">
+                                        <label class="form-check-label" for="emergency">
+                                            <span class="badge bg-dark">Emergency</span> - Safety issue
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">📸 Photos (Optional)</label>
+                            <input type="file" class="form-control" name="photos" multiple 
+                                   accept="image/*,.pdf" 
+                                   title="Upload photos of the issue">
+                            <div class="form-text">Upload photos to help document the issue (JPG, PNG, PDF)</div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-send me-2"></i>Submit Request
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- My Requests -->
+            {% if requests %}
+            <div class="card shadow-sm mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>My Requests</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Issue</th>
+                                    <th>Status</th>
+                                    <th>Submitted</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for req in requests %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ req.title }}</strong>
+                                        {% if req.priority == 'emergency' or req.priority == 'high' %}
+                                            <span class="badge bg-danger ms-1">{{ req.priority|title }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ 'success' if req.status == 'completed' else 'warning' if req.status == 'in_progress' else 'secondary' }}">
+                                            {{ req.status|replace('_', ' ')|title }}
+                                        </span>
+                                    </td>
+                                    <td>{{ req.created_at.strftime('%m/%d/%Y') }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Back Link -->
+            <div class="text-center mt-4">
+                <a href="{{ url_for('tenant_portal', token=token) }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Portal
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

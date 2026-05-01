@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}Property Manager Portal - RentKeepers{% endblock %}
+
+{% block content %}
+<style>
+    body { background-color: #f5f7fa; }
+    .manager-header {
+        background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+        color: white;
+        padding: 40px 0;
+        margin-bottom: 30px;
+    }
+    .stat-card {
+        transition: transform 0.2s;
+    }
+    .stat-card:hover {
+        transform: translateY(-2px);
+    }
+</style>
+
+<div class="manager-header">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col">
+                <h1 class="mb-2"><i class="bi bi-building me-2"></i>Property Manager Portal</h1>
+                <p class="mb-0 opacity-75">{{ manager.manager_name }} • {{ manager.manager_email }}</p>
+                <div class="mt-2">
+                    <span class="badge bg-white bg-opacity-25 me-2">🔑 Limited Access</span>
+                    <span class="badge bg-white bg-opacity-25">👁️ View Only</span>
+                </div>
+            </div>
+            <div class="col-auto">
+                <a href="{{ url_for('manager_logout', token=token) }}" class="btn btn-outline-light">
+                    <i class="bi bi-box-arrow-right me-2"></i>Logout
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <!-- Stats Grid -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-4 col-lg-2">
+            <div class="card stat-card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="fs-1">🏠</div>
+                        <div>
+                            <div class="h4 mb-0 text-primary">{{ stats.total_properties }}</div>
+                            <small class="text-muted">Properties</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-lg-2">
+            <div class="card stat-card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="fs-1">👥</div>
+                        <div>
+                            <div class="h4 mb-0 text-success">{{ stats.total_tenants }}</div>
+                            <small class="text-muted">Tenants</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-lg-3">
+            <div class="card stat-card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="fs-1">💰</div>
+                        <div>
+                            <div class="h4 mb-0 text-purple-600">${{ "%.0f"|format(stats.collected_this_month) }}</div>
+                            <small class="text-muted">Collected This Month</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-lg-3">
+            <div class="card stat-card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="fs-1">⏰</div>
+                        <div>
+                            <div class="h4 mb-0 text-warning">${{ "%.0f"|format(stats.expected_this_month) }}</div>
+                            <small class="text-muted">Expected This Month</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-lg-2">
+            <div class="card stat-card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="fs-1">🔧</div>
+                        <div>
+                            <div class="h4 mb-0 text-danger">{{ stats.open_maintenance }}</div>
+                            <small class="text-muted">Open Maintenance</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Recent Payments -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0">
+                    <h5 class="mb-0"><i class="bi bi-cash-coin me-2"></i>Recent Payments</h5>
+                </div>
+                <div class="card-body p-0">
+                    {% if recent_payments %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th class="border-0">Tenant</th>
+                                    <th class="border-0">Property</th>
+                                    <th class="border-0">Amount</th>
+                                    <th class="border-0">Date</th>
+                                    <th class="border-0">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for payment in recent_payments %}
+                                <tr>
+                                    <td>{{ payment.tenant.name if payment.tenant else 'N/A' }}</td>
+                                    <td>{{ payment.tenant.property_address if payment.tenant else 'N/A' }}</td>
+                                    <td class="text-success fw-bold">${{ "%.2f"|format(payment.amount_paid) }}</td>
+                                    <td>{{ payment.payment_date.strftime('%b %d, %Y') if payment.payment_date else 'N/A' }}</td>
+                                    <td>
+                                        <span class="badge bg-success">{{ payment.payment_method }}</span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-receipt text-muted" style="font-size: 3rem;"></i>
+                        <p class="mt-3 text-muted">No recent payments</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Urgent Maintenance -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0">
+                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Urgent Maintenance</h5>
+                </div>
+                <div class="card-body p-0">
+                    {% if urgent_maintenance %}
+                    <div class="list-group list-group-flush">
+                        {% for req in urgent_maintenance %}
+                        <div class="list-group-item border-0">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1">{{ req.title }}</h6>
+                                    <small class="text-muted">{{ req.tenant.name if req.tenant else 'N/A' }}</small>
+                                </div>
+                                <span class="badge {% if req.priority == 'emergency' %}bg-danger{% elif req.priority == 'high' %}bg-orange{% else %}bg-warning{% endif %}">
+                                    {{ req.priority|upper }}
+                                </span>
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted">{{ req.created_at.strftime('%b %d') if req.created_at else 'N/A' }}</small>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-check-circle text-success" style="font-size: 3rem;"></i>
+                        <p class="mt-3 text-muted">No urgent maintenance</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row g-4 mt-4">
+        <div class="col-md-3">
+            <a href="{{ url_for('manager_properties', token=token) }}" class="card text-center text-decoration-none border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="fs-1 mb-2">🏠</div>
+                    <h6 class="mb-0">Properties</h6>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-3">
+            <a href="{{ url_for('manager_tenants', token=token) }}" class="card text-center text-decoration-none border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="fs-1 mb-2">👥</div>
+                    <h6 class="mb-0">Tenants</h6>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-3">
+            <a href="{{ url_for('manager_maintenance', token=token) }}" class="card text-center text-decoration-none border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="fs-1 mb-2">🔧</div>
+                    <h6 class="mb-0">Maintenance</h6>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-3">
+            <a href="{{ url_for('manager_messages', token=token) }}" class="card text-center text-decoration-none border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="fs-1 mb-2">📧</div>
+                    <h6 class="mb-0">Messages</h6>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Footer -->
+<footer class="text-center py-8 text-gray-500 text-sm mt-8">
+    <div class="container">
+        <p>Powered by <strong>RentKeepers</strong> • Property Manager Access</p>
+        <p class="mt-1">Need help? <a href="mailto:support@rentkeepers.com">Contact Support</a></p>
+    </div>
+</footer>
+{% endblock %}

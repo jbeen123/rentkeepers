@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api/client';
+import { Link } from 'react-router-dom';
+import TwoFactorAuth from '../components/TwoFactorAuth';
+import DataExport from '../components/DataExport';
+import TeamPermissions from '../components/TeamPermissions';
 
 export default function Settings() {
   const { user, updateUser } = useAuth();
@@ -73,18 +77,22 @@ export default function Settings() {
         </div>
       )}
 
-      <div className="flex gap-4 mb-6 border-b">
-        {['profile', 'password', '2fa'].map((tab) => (
+      <div className="flex gap-4 mb-6 border-b overflow-x-auto">
+        {['profile', 'password', '2fa', 'team', 'export', 'audit'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`pb-2 px-4 font-semibold ${
+            className={`pb-2 px-4 font-semibold whitespace-nowrap ${
               activeTab === tab
                 ? 'border-b-2 border-blue-600 text-blue-600'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            {tab === '2fa' ? 'Two-Factor Auth' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab === '2fa' ? '🔐 2FA' : 
+             tab === 'team' ? '👥 Team' :
+             tab === 'export' ? '📦 Data Export' :
+             tab === 'audit' ? '📜 Audit Logs' :
+             tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         ))}
       </div>
@@ -178,22 +186,35 @@ export default function Settings() {
       )}
 
       {activeTab === '2fa' && (
-        <div className="bg-white rounded-lg shadow p-6 max-w-xl">
-          <h3 className="text-lg font-semibold mb-4">Two-Factor Authentication</h3>
-          <p className="text-gray-600 mb-4">
-            {user?.totp_enabled
-              ? '✅ 2FA is currently enabled on your account.'
-              : '⚠️ 2FA is not enabled. Enable it for extra security.'}
+        <div className="max-w-xl">
+          <TwoFactorAuth />
+        </div>
+      )}
+
+      {activeTab === 'team' && (
+        <div className="max-w-4xl">
+          <TeamPermissions />
+        </div>
+      )}
+
+      {activeTab === 'export' && (
+        <div className="max-w-xl">
+          <DataExport />
+        </div>
+      )}
+
+      {activeTab === 'audit' && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold mb-4">📜 Audit Logs</h3>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            View all activity in your account. Track who did what and when for security and compliance.
           </p>
-          {user?.totp_enabled ? (
-            <button className="bg-red-600 text-white font-bold py-2 px-6 rounded hover:bg-red-700">
-              Disable 2FA
-            </button>
-          ) : (
-            <button className="bg-green-600 text-white font-bold py-2 px-6 rounded hover:bg-green-700">
-              Enable 2FA
-            </button>
-          )}
+          <Link
+            to="/audit-logs"
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 inline-block"
+          >
+            Open Audit Logs →
+          </Link>
         </div>
       )}
     </div>

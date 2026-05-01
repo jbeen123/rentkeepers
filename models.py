@@ -104,12 +104,15 @@ class User(Base):
     properties = relationship("Property", back_populates="user", cascade="all, delete-orphan")
     expenses = relationship("Expense", back_populates="user", cascade="all, delete-orphan")
     company_settings = relationship("CompanySettings", back_populates="user", uselist=False)
-    statements = relationship("OwnerStatementRecord", back_populates="user", cascade="all, delete-orphan")
+    statements = relationship("OwnerStatementRecord", back_populates="user", foreign_keys="OwnerStatementRecord.user_id", cascade="all, delete-orphan")
+    applications = relationship("RentalApplication", back_populates="user", cascade="all, delete-orphan")
     
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
     
     def check_password(self, password):
+        if not self.password_hash:
+            return False
         return check_password_hash(self.password_hash, password)
     
     def is_authenticated(self):
@@ -191,6 +194,7 @@ class Property(Base):
     tenants = relationship("Tenant", back_populates="property_rel")
     expenses = relationship("Expense", back_populates="property_rel")
     statements = relationship("OwnerStatementRecord", back_populates="property_rel")
+    applications = relationship("RentalApplication", back_populates="property_rel")
     
     @property
     def occupancy_rate(self):
@@ -227,10 +231,30 @@ class Tenant(Base):
     lease_start = Column(Date, nullable=True)
     lease_end = Column(Date, nullable=True)
     security_deposit = Column(Float, default=0.0)
+    lease_document_path = Column(String(500), nullable=True)  # Path to uploaded lease PDF
+    
+    # Insurance tracking
+    insurance_required = Column(Boolean, default=False)
+    insurance_provider = Column(String(100), nullable=True)
+    insurance_policy_number = Column(String(50), nullable=True)
+    insurance_expiry_date = Column(Date, nullable=True)
+    insurance_verified = Column(Boolean, default=False)
+    insurance_document_path = Column(String(500), nullable=True)
+    
+    # Late fee settings
+    late_fee_enabled = Column(Boolean, default=False)
+    late_fee_type = Column(String(20), default='flat')  # 'flat' or 'percentage'
+    late_fee_amount = Column(Float, default=0.0)  # Flat amount or percentage
+    grace_period_days = Column(Integer, default=5)  # Days after due date before late fee
     
     # Tenant portal
     portal_enabled = Column(Boolean, default=False)
     portal_token = Column(String(64), nullable=True)
+    
+    # Credit reporting
+    credit_reporting_enabled = Column(Boolean, default=False)
+    credit_report_consent = Column(Boolean, default=False)
+    credit_bureau_id = Column(String(100), nullable=True)
     
     # Payment preferences
     preferred_payment_method = Column(String(20), default='card')  # card, ach, check
@@ -293,6 +317,10 @@ class Payment(Base):
     # Refund tracking
     refunded_amount = Column(Float, default=0.0)
     refund_date = Column(DateTime, nullable=True)
+    
+    # Late fee tracking
+    late_fee_applied = Column(Boolean, default=False)
+    late_fee_amount = Column(Float, default=0.0)
     
     tenant = relationship("Tenant", back_populates="payments")
     user = relationship("User", back_populates="payments")
@@ -472,6 +500,13 @@ class MaintenanceRequest(Base):
     description = Column(Text)
     priority = Column(String(20), default='medium')  # low, medium, high, emergency
     status = Column(String(20), default='open')  # open, in_progress, completed, cancelled
+    is_message = Column(Boolean, default=False)  # True if this is a tenant message, not maintenance
+    
+    # Photo uploads (JSON array of file paths)
+    photo_paths = Column(Text, nullable=True)  # JSON array: ["path1.jpg", "path2.jpg"]
+    
+    manager_response = Column(Text, nullable=True)
+    response_at = Column(DateTime, nullable=True)
     
     estimated_cost = Column(Float, nullable=True)
     actual_cost = Column(Float, nullable=True)
@@ -492,6 +527,238 @@ class AuditLog(Base):
     details = Column(Text)
     ip_address = Column(String(45))
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ============== LATE RENT WORKFLOW MODELS ==============
+
+class LateNotice(Base):
+    __tablename__ = 'late_notices'
+    
+    id = Column(Integer, primary_key=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    payment_id = Column(Integer, ForeignKey('payments.id'), nullable=True)
+    
+    # Notice details
+    days_late = Column(Integer, nullable=False)
+    notice_type = Column(String(50), nullable=False)  # reminder, late, final, pay_or_quit
+    amount_due = Column(Float, nullable=False)
+    late_fee = Column(Float, default=0.0)
+    
+    # Delivery
+    sent_via = Column(String(20))  # email, sms, both
+    sent_at = Column(DateTime, default=datetime.utcnow)
+    delivered = Column(Boolean, default=False)
+    
+    # Status
+    status = Column(String(20), default='sent')  # sent, viewed, paid, escalated
+    notes = Column(Text)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    tenant = relationship('Tenant', backref='late_notices')
+    user = relationship('User')
+    payment = relationship('Payment')
+
+
+# ============== CALENDAR MODELS ==============
+
+class CalendarEvent(Base):
+    __tablename__ = 'calendar_events'
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    
+    # Event details
+    title = Column(String(200), nullable=False)
+    description = Column(Text)
+    event_type = Column(String(50), nullable=False)  # rent_due, lease_expiration, maintenance, inspection, custom
+    
+    # Timing
+    start_date = Column(DateTime, nullable=False)
+    end_date = Column(DateTime, nullable=True)
+    all_day = Column(Boolean, default=True)
+    recurring = Column(Boolean, default=False)
+    recurring_pattern = Column(String(20))  # daily, weekly, monthly, yearly
+    
+    # Related resources
+    tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=True)
+    property_id = Column(Integer, ForeignKey('properties.id'), nullable=True)
+    maintenance_request_id = Column(Integer, ForeignKey('maintenance_requests.id'), nullable=True)
+    
+    # Reminders
+    reminder_enabled = Column(Boolean, default=True)
+    reminder_days_before = Column(Integer, default=3)
+    reminder_sent = Column(Boolean, default=False)
+    
+    # Metadata
+    color = Column(String(20), default='blue')  # blue, green, red, orange, purple
+    priority = Column(String(20), default='normal')  # low, normal, high, urgent
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship('User')
+    tenant = relationship('Tenant')
+    property = relationship('Property')
+    maintenance_request = relationship('MaintenanceRequest')
+
+
+# ============== DOCUMENT MANAGEMENT MODELS ==============
+
+class Document(Base):
+    __tablename__ = 'documents'
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    
+    # Document details
+    title = Column(String(200), nullable=False)
+    description = Column(Text)
+    document_type = Column(String(50), nullable=False)  # lease, inspection, photo, contract, warranty, other
+    
+    # File info
+    file_path = Column(String(500), nullable=False)
+    file_name = Column(String(200), nullable=False)
+    file_size = Column(Integer)  # bytes
+    mime_type = Column(String(100))
+    
+    # Categorization
+    property_id = Column(Integer, ForeignKey('properties.id'), nullable=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=True)
+    unit_number = Column(String(20))
+    
+    # Metadata
+    tags = Column(String(500))  # comma-separated tags
+    is_template = Column(Boolean, default=False)
+    is_signed = Column(Boolean, default=False)
+    signed_at = Column(DateTime, nullable=True)
+    
+    # Access
+    is_private = Column(Boolean, default=False)
+    shared_with_tenant = Column(Boolean, default=False)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship('User')
+    property = relationship('Property')
+    tenant = relationship('Tenant')
+
+
+class DocumentTemplate(Base):
+    __tablename__ = 'document_templates'
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    
+    # Template details
+    name = Column(String(200), nullable=False)
+    description = Column(Text)
+    template_type = Column(String(50), nullable=False)  # lease, notice, letter, form
+    
+    # Content
+    content = Column(Text, nullable=False)  # HTML or markdown content
+    variables = Column(String(500))  # comma-separated variable names
+    
+    # Usage
+    usage_count = Column(Integer, default=0)
+    last_used = Column(DateTime, nullable=True)
+    
+    # Metadata
+    category = Column(String(50))  # legal, notice, informational
+    is_default = Column(Boolean, default=False)  # system-provided template
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship('User')
+
+
+class RentalApplication(Base):
+    """Online rental application form submissions"""
+    __tablename__ = 'rental_applications'
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)  # Landlord
+    property_id = Column(Integer, ForeignKey('properties.id'), nullable=True)
+    
+    # Applicant info
+    first_name = Column(String(100), nullable=False)
+    last_name = Column(String(100), nullable=False)
+    email = Column(String(120), nullable=False)
+    phone = Column(String(20), nullable=False)
+    date_of_birth = Column(Date, nullable=True)
+    ssn_last4 = Column(String(4), nullable=True)  # Last 4 digits of SSN
+    
+    # Current address
+    current_address = Column(String(255), nullable=False)
+    current_city = Column(String(100), nullable=False)
+    current_state = Column(String(50), nullable=False)
+    current_zip = Column(String(20), nullable=False)
+    current_rent = Column(Float, nullable=True)
+    landlord_name = Column(String(100), nullable=True)
+    landlord_phone = Column(String(20), nullable=True)
+    
+    # Employment info
+    employment_status = Column(String(50), nullable=False)  # employed, self-employed, unemployed, other
+    employer_name = Column(String(100), nullable=True)
+    employer_phone = Column(String(20), nullable=True)
+    position = Column(String(100), nullable=True)
+    monthly_income = Column(Float, nullable=True)
+    
+    # Additional occupants
+    additional_occupants = Column(Text, nullable=True)  # JSON array of {name, relationship, age}
+    
+    # Pets
+    has_pets = Column(Boolean, default=False)
+    pet_details = Column(Text, nullable=True)  # JSON array of {type, breed, weight}
+    
+    # Vehicle
+    has_vehicle = Column(Boolean, default=False)
+    vehicle_make = Column(String(50), nullable=True)
+    vehicle_model = Column(String(50), nullable=True)
+    vehicle_year = Column(Integer, nullable=True)
+    vehicle_color = Column(String(50), nullable=True)
+    license_plate = Column(String(20), nullable=True)
+    
+    # References
+    references = Column(Text, nullable=True)  # JSON array of {name, relationship, phone, email}
+    
+    # Additional info
+    move_in_date = Column(Date, nullable=True)
+    lease_term = Column(String(50), nullable=True)  # 6 months, 1 year, month-to-month
+    how_heard = Column(String(100), nullable=True)
+    additional_comments = Column(Text, nullable=True)
+    
+    # Screening consent
+    consent_background_check = Column(Boolean, default=False)
+    consent_credit_check = Column(Boolean, default=False)
+    
+    # Status
+    status = Column(String(20), default='pending')  # pending, reviewed, approved, denied, withdrawn
+    screening_status = Column(String(20), nullable=True)  # not_started, in_progress, completed
+    screening_report_url = Column(String(500), nullable=True)
+    
+    # Admin notes
+    admin_notes = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", back_populates="applications")
+    property_rel = relationship("Property", back_populates="applications")
+
+
+# Add back_populates to User model
+# Add to User class relationships section:
+# applications = relationship("RentalApplication", back_populates="user", cascade="all, delete-orphan")
 
 
 def init_db():

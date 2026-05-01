@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }} - Property Manager Portal{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="{{ icon }} me-2"></i>{{ page_title }}</h2>
+            <p class="text-muted">{{ description }}</p>
+        </div>
+        <div class="col-auto">
+            <a href="{{ url_for('manager_dashboard', token=token) }}" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-body text-center py-5">
+            <div class="fs-1 mb-3">{{ icon }}</div>
+            <h5>{{ page_title }} view coming soon</h5>
+            <p class="text-muted">{{ description }}</p>
+            <p class="text-muted mt-3">
+                <small>This feature is under development. Check back soon!</small>
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

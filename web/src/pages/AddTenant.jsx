@@ -14,6 +14,10 @@ export default function AddTenant() {
     monthly_rent: '',
     due_day: '1',
     property_id: '',
+    late_fee_enabled: false,
+    late_fee_type: 'flat',
+    late_fee_amount: '',
+    grace_period_days: 5,
   });
 
   const { data: properties } = useQuery({
@@ -35,6 +39,9 @@ export default function AddTenant() {
         ...formData,
         monthly_rent: parseFloat(formData.monthly_rent),
         due_day: parseInt(formData.due_day),
+        late_fee_enabled: formData.late_fee_enabled === true,
+        late_fee_amount: parseFloat(formData.late_fee_amount) || 0,
+        grace_period_days: parseInt(formData.grace_period_days) || 5,
       });
       navigate('/tenants');
     } catch (err) {
@@ -134,6 +141,66 @@ export default function AddTenant() {
                 <option key={p.id} value={p.id}>{p.name || p.address}</option>
               ))}
             </select>
+          </div>
+        </div>
+
+        {/* Late Fee Settings */}
+        <div className="border-t pt-4 mt-4">
+          <h3 className="text-lg font-semibold mb-3">⚠️ Late Fee Settings</h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+            <div className="md:col-span-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.late_fee_enabled}
+                  onChange={(e) => setFormData({ ...formData, late_fee_enabled: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <span className="font-medium">Enable automatic late fees</span>
+              </label>
+            </div>
+
+            {formData.late_fee_enabled && (
+              <>
+                <div>
+                  <label className="block text-gray-700 font-bold mb-2">Fee Type</label>
+                  <select
+                    value={formData.late_fee_type}
+                    onChange={(e) => setFormData({ ...formData, late_fee_type: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="flat">Flat Fee</option>
+                    <option value="percentage">Percentage</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 font-bold mb-2">
+                    Late Fee {formData.late_fee_type === 'percentage' ? '(%)' : '($)'}
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.late_fee_amount}
+                    onChange={(e) => setFormData({ ...formData, late_fee_amount: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+                    step="0.01"
+                    min="0"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 font-bold mb-2">Grace Period (Days)</label>
+                  <input
+                    type="number"
+                    value={formData.grace_period_days}
+                    onChange={(e) => setFormData({ ...formData, grace_period_days: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+                    min="0"
+                    max="30"
+                  />
+                </div>
+              </>
+            )}
           </div>
         </div>
 

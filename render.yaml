@@ -1,13 +1,16 @@
 services:
   - type: web
-    name: rentkeepers-backend
-    runtime: python
-    pythonVersion: 3.11
+    name: rentkeepers
+    env: python
+    region: oregon
+    plan: starter
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 app:app
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 4
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: FLASK_ENV
+        value: production
       - key: SECRET_KEY
         generateValue: true
       - key: DATABASE_URL
@@ -18,15 +21,15 @@ services:
         sync: false
       - key: STRIPE_PUBLISHABLE_KEY
         sync: false
-      - key: STRIPE_WEBHOOK_SECRET
+      - key: MAIL_SERVER
+        value: smtp.gmail.com
+      - key: MAIL_PORT
+        value: 587
+      - key: MAIL_USERNAME
         sync: false
-      - key: FLASK_ENV
-        value: production
-      - key: FLASK_DEBUG
-        value: "false"
-
+      - key: MAIL_PASSWORD
+        sync: false
 databases:
   - name: rentkeepers-db
     databaseName: rentkeepers
-    user: rentkeepers
-    plan: free
+    plan: starter
