@@ -3062,7 +3062,7 @@ def check_late_rent():
                     
                     # Send email notification
                     if app.config['MAIL_USERNAME']:
-                        subject = f'Rent Payment {'Reminder' if notice_type == 'reminder' else 'Notice'} - {tenant.property_address}'
+                        subject = f"Rent Payment {'Reminder' if notice_type == 'reminder' else 'Notice'} - {tenant.property_address}"
                         body = f"""
 Dear {tenant.name},
 
